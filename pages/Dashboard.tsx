@@ -16,7 +16,7 @@ const Dashboard: React.FC = () => {
       try {
         const [nodes, workloads] = await Promise.all([
           request<NodeBrief[]>('/k8s/get/nodes'),
-          request<NamespaceControllers>('/k8s/namespaces/default/controllers')
+          request<NamespaceControllers>('/k8s/get/namespaces/default/controllers')
         ]);
         
         setStats({

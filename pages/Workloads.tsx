@@ -1,29 +1,121 @@
 
 import React, { useEffect, useState } from 'react';
 import { request } from '../utils/client';
-import { NamespaceControllers, ControllerResource } from '../types';
+import { NamespaceControllers, ControllerResource, NamespaceListResponse, NamespaceControllersResponse } from '../types';
 
 const Workloads: React.FC = () => {
+  const [namespaces, setNamespaces] = useState<string[]>([]);
+  const [selectedNamespace, setSelectedNamespace] = useState('default');
   const [data, setData] = useState<NamespaceControllers | null>(null);
-  const [namespace, setNamespace] = useState('default');
   const [loading, setLoading] = useState(true);
+  const [namespaceLoading, setNamespaceLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'deployments' | 'statefulsets' | 'daemonsets'>('deployments');
+
+  const fetchNamespaces = async () => {
+    setNamespaceLoading(true);
+    console.log('🚀 Starting namespace fetch...');
+    console.log('🔑 Token available:', !!localStorage.getItem('k8s_token'));
+    console.log('📋 Current namespaces state before fetch:', namespaces);
+    
+    try {
+      const apiUrl = '/k8s/get/namespaces/namespacename';
+      console.log('🔗 Making request to:', apiUrl);
+      
+      const response = await request<NamespaceListResponse>(apiUrl);
+      console.log('📦 Raw API response:', response);
+      console.log('📊 Response type:', typeof response);
+      console.log('🔑 Response keys:', Object.keys(response || {}));
+      console.log('🔍 Detailed response inspection:');
+      console.log('  - Has namespaces property:', response && 'namespaces' in response);
+      console.log('  - Namespaces value:', response?.namespaces);
+      console.log('  - Is array check:', Array.isArray(response?.namespaces));
+      console.log('  - Namespaces length:', response?.namespaces?.length);
+      
+      // 检查API响应格式
+      if (response && Array.isArray(response.namespaces)) {
+        console.log('Successfully fetched namespaces:', response.namespaces);
+        setNamespaces(response.namespaces);
+        
+        // 更新选中的命名空间，如果当前选中的命名空间不在列表中
+        if (response.namespaces.length > 0) {
+          if (!response.namespaces.includes(selectedNamespace)) {
+            console.log(`Updating selected namespace from ${selectedNamespace} to ${response.namespaces[0]}`);
+            setSelectedNamespace(response.namespaces[0]);
+          }
+        } else {
+          console.warn('No namespaces found from API');
+          // 如果API返回空数组，设置一个默认命名空间
+          setNamespaces(['default']);
+        }
+      } else {
+        console.error('Invalid response format for namespaces');
+        console.log('Response structure:', JSON.stringify(response, null, 2));
+        console.log('Expected format: { namespaces: string[] }');
+        console.log('Actual response has namespaces property:', response && 'namespaces' in response);
+        setNamespaces(['default']);
+      }
+    } catch (err) {
+      console.error('Failed to fetch namespaces:', err);
+      // 发生错误时设置默认命名空间
+      setNamespaces(['default']);
+      setSelectedNamespace('default');
+    } finally {
+      setNamespaceLoading(false);
+    }
+  };
 
   const fetchData = async (ns: string) => {
     setLoading(true);
     try {
-      const result = await request<NamespaceControllers>(`/k8s/namespaces/${ns}/controllers`);
-      setData(result);
+      // Skip if namespace is empty
+      if (!ns) {
+        console.warn('Empty namespace, skipping data fetch');
+        setLoading(false);
+        return;
+      }
+      
+      console.log(`Fetching controllers for namespace: ${ns}`);
+      const response = await request<NamespaceControllersResponse>(`/k8s/get/namespaces/${encodeURIComponent(ns)}/controllers`);
+      console.log('Controllers API response:', response);
+      
+      // 更新后的响应格式直接使用数据而不是通过response.data
+      if (response) {
+        setData(response);
+      } else {
+        console.error('Invalid response format for controllers');
+        // Set empty data on invalid response
+        setData({
+          namespace: ns,
+          deployments: [],
+          statefulsets: [],
+          daemonsets: []
+        });
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch workload data:', err);
+      // Set empty data on error
+      setData({
+        namespace: ns,
+        deployments: [],
+        statefulsets: [],
+        daemonsets: []
+      });
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData(namespace);
-  }, [namespace]);
+    // Initialize with default namespace
+    fetchNamespaces();
+  }, []);
+
+  useEffect(() => {
+    // Only fetch data if we have a valid namespace
+    if (selectedNamespace && selectedNamespace.trim()) {
+      fetchData(selectedNamespace);
+    }
+  }, [selectedNamespace]);
 
   const resources = data ? data[activeTab] : [];
 
@@ -33,13 +125,20 @@ const Workloads: React.FC = () => {
         <div className="flex items-center gap-3">
           <label className="text-sm font-medium text-slate-600">Namespace:</label>
           <select 
-            value={namespace}
-            onChange={(e) => setNamespace(e.target.value)}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            value={selectedNamespace}
+            onChange={(e) => setSelectedNamespace(e.target.value)}
+            disabled={namespaceLoading}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            <option value="default">default</option>
-            <option value="kube-system">kube-system</option>
-            <option value="ingress-nginx">ingress-nginx</option>
+            {namespaceLoading ? (
+              <option value="">Loading namespaces...</option>
+            ) : namespaces.length > 0 ? (
+              namespaces.map((ns) => (
+                <option key={ns} value={ns}>{ns}</option>
+              ))
+            ) : (
+              <option value="">No namespaces available</option>
+            )}
           </select>
         </div>
         

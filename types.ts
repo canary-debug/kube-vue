@@ -37,6 +37,22 @@ export interface NamespaceControllers {
   daemonsets: any[]; // Similar structure
 }
 
+export interface ApiResponse<T> {
+  code: number;
+  data: T;
+}
+
+export interface NamespaceListResponse {
+  namespaces: string[];
+}
+
+export interface NamespaceControllersResponse {
+  namespace: string;
+  deployments: ControllerResource[];
+  statefulsets: ControllerResource[];
+  daemonsets: any[];
+}
+
 export interface NodeBrief {
   name: string;
   status: string;
@@ -59,6 +75,10 @@ export interface NodeDetail {
   coreVersion: string;
   nodecreatetime: string;
   taints: any[];
+}
+
+export interface NamespaceList {
+  namespaces: string[];
 }
 
 export interface PodResource {
