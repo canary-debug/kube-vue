@@ -1,0 +1,5 @@
+
+{
+  "name": "Kube-Vue-Admin",
+  "description": "A high-performance Kubernetes management dashboard with support for authentication, node monitoring, and workload management (Deployments, StatefulSets, DaemonSets)."
+}
