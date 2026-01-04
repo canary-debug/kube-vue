@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { request } from '../utils/client';
-import { NamespaceControllers, NodeBrief } from '../types';
+import { NamespaceControllers, NodeBrief, NodeCountResponse } from '../types';
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({
@@ -13,21 +13,61 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      setLoading(true);
       try {
-        const [nodes, workloads] = await Promise.all([
-          request<NodeBrief[]>('/k8s/get/nodes'),
-          request<NamespaceControllers>('/k8s/get/namespaces/default/controllers')
-        ]);
+        console.log('🚀 Starting dashboard data fetch...');
         
+        // 使用正确的API端点获取节点数量，确保从后端获取真实数据
+        const nodeData = await request<{ node_len: number }>('/k8s/get/nodes/len');
+        console.log('📦 Node count API response:', nodeData);
+        console.log('🔑 Response keys:', Object.keys(nodeData || {}));
+        
+        // 提取节点数量，确保是数字类型
+        let nodeCount = 0;
+        if (nodeData && typeof nodeData === 'object') {
+          // 检查是否有node_len属性
+          if ('node_len' in nodeData) {
+            // 确保转换为数字类型
+            nodeCount = parseInt(nodeData.node_len as unknown as string, 10);
+            console.log('📊 Extracted node count:', nodeCount, 'from node_len:', nodeData.node_len);
+          } 
+          // 检查是否有其他可能的属性名（如nodes或length）
+          else if ('nodes' in nodeData) {
+            nodeCount = parseInt(nodeData.nodes as unknown as string, 10);
+            console.log('📊 Extracted node count from nodes property:', nodeCount);
+          }
+          // 检查是否是数组格式
+          else if (Array.isArray(nodeData)) {
+            nodeCount = nodeData.length;
+            console.log('📊 Extracted node count from array length:', nodeCount);
+          }
+        }
+        
+        console.log('📊 Final node count:', nodeCount);
+        
+        // 对于pods和deployments，暂时设置为0，后续可添加真实数据获取
+        const pods = 0;
+        const deployments = 0;
+        
+        // 更新状态
         setStats({
-          nodes: nodes.length,
-          pods: workloads.deployments.reduce((acc, d) => acc + d.ready, 0),
-          deployments: workloads.deployments.length
+          nodes: nodeCount,
+          pods: pods,
+          deployments: deployments
         });
+        
+        console.log('✅ Dashboard stats updated successfully');
       } catch (err) {
-        console.error("Failed to load dashboard data", err);
+        console.error('❌ Error fetching dashboard data:', err);
+        // 错误时设置默认值为0
+        setStats({
+          nodes: 0,
+          pods: 0,
+          deployments: 0
+        });
       } finally {
         setLoading(false);
+        console.log('🔚 Dashboard data fetch completed');
       }
     };
     fetchDashboardData();

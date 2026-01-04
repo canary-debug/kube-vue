@@ -72,6 +72,11 @@ export interface NodeBrief {
   taints: any[];
 }
 
+// New interface for node count API response
+export interface NodeCountResponse {
+  node_len: number;
+}
+
 export interface NodeDetail {
   name: string;
   status: string;
