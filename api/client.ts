@@ -1,5 +1,5 @@
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const request = async <T,>(url: string, options: RequestInit = {}): Promise<T> => {
   const token = localStorage.getItem('k8s_token');
@@ -21,10 +21,26 @@ export const request = async <T,>(url: string, options: RequestInit = {}): Promi
     throw new Error('Unauthorized');
   }
 
-  const data = await response.json();
+  // 尝试解析JSON响应，如果失败则提供更有用的错误信息
+  let data;
+  try {
+    const text = await response.text();
+    if (!text.trim()) {
+      throw new Error('Empty response from server');
+    }
+    data = JSON.parse(text);
+  } catch (parseError) {
+    if (response.status === 404) {
+      throw new Error('API endpoint not found');
+    } else if (response.status === 500) {
+      throw new Error('Server internal error');
+    } else {
+      throw new Error(`Failed to parse server response: ${parseError}`);
+    }
+  }
   
   if (!response.ok) {
-    throw new Error(data.error || data.msg || 'Request failed');
+    throw new Error(data.error || data.msg || `HTTP ${response.status}: Request failed`);
   }
 
   return data as T;
