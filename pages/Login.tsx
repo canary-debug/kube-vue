@@ -85,14 +85,14 @@ const Login: React.FC = () => {
             disabled={loading}
             className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-lg shadow-blue-200"
           >
-            {loading ? <i className="fas fa-spinner fa-spin"></i> : 'Login'}
+            {loading ? <i className="fas fa-spinner fa-spin"></i> : '登录'}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-slate-600">
-          Don't have an account?{' '}
+          还没有账号吗？{' '}
           <Link to="/register" className="text-blue-600 font-semibold hover:underline">
-            Register now
+            立即注册
           </Link>
         </p>
       </div>
