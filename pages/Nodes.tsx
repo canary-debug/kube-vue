@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { request } from '../api/client';
+import { request } from '../utils/client';
 import { NodeBrief } from '../types';
 
 const Nodes: React.FC = () => {

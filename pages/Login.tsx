@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
-import { request } from '../api/client';
+import { request } from '../utils/client';
 import { AuthResponse } from '../types';
 
 const Login: React.FC = () => {

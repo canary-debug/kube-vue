@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { request } from '../api/client';
+import { request } from '../utils/client';
 import { NamespaceControllers, NodeBrief } from '../types';
 
 const Dashboard: React.FC = () => {

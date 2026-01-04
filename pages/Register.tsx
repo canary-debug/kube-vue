@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { request } from '../api/client';
+import { request } from '../utils/client';
 import { RegisterResponse } from '../types';
 
 const Register: React.FC = () => {
