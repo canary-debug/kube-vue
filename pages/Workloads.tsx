@@ -66,23 +66,61 @@ const Workloads: React.FC = () => {
 
   const fetchData = async (ns: string) => {
     setLoading(true);
+    console.log('🔄 Starting fetchData for namespace:', ns);
     try {
       // Skip if namespace is empty
       if (!ns) {
-        console.warn('Empty namespace, skipping data fetch');
+        console.warn('⚠️  Empty namespace, skipping data fetch');
         setLoading(false);
         return;
       }
       
-      console.log(`Fetching controllers for namespace: ${ns}`);
-      const response = await request<NamespaceControllersResponse>(`/k8s/get/namespaces/${encodeURIComponent(ns)}/controllers`);
-      console.log('Controllers API response:', response);
+      // Use the new API endpoint for deployments
+      const apiUrl = `/k8s/get/deployment/${encodeURIComponent(ns)}`;
+      console.log('🔗 API URL being called:', apiUrl);
+      console.log('🌐 Full API path (with base):', '/api' + apiUrl);
+      console.log('🎯 Target backend:', 'http://localhost:9000/api' + apiUrl);
       
-      // 更新后的响应格式直接使用数据而不是通过response.data
-      if (response) {
-        setData(response);
+      const response = await request<DeploymentResponse>(apiUrl);
+      console.log('📦 Raw API response for namespace', ns, ':', response);
+      
+      // Log response details
+      if (response && response.Status) {
+        console.log('📊 Response contains', response.Status.length, 'deployments');
+        console.log('📋 Deployment names:', response.Status.map(d => d.name));
+      }
+      
+      // Transform the response to match the expected format
+      if (response && response.Status) {
+        // Extract ready count from status string (e.g., "运行中 (1/1)" → ready: 1)
+        const deployments = response.Status.map(deployment => {
+          const readyMatch = deployment.status.match(/\((\d+)\/(\d+)\)/);
+          const ready = readyMatch ? parseInt(readyMatch[1], 10) : 0;
+          
+          return {
+            name: deployment.name,
+            replicas: deployment.replicas,
+            images: [], // New API doesn't provide images, set empty array
+            ready: ready,
+            updated: ready, // Assume all ready replicas are updated
+            available: ready, // Assume all ready replicas are available
+            created_at: deployment.update_time, // Use update_time as created_at
+            update_at: deployment.update_time,
+            port: 0 // New API doesn't provide port, set default to 0
+          };
+        });
+        
+        console.log('✅ Setting data for namespace', ns, 'with', deployments.length, 'deployments');
+        setData({
+          namespace: ns,
+          deployments: deployments,
+          statefulsets: [], // New API doesn't provide statefulsets
+          daemonsets: [] // New API doesn't provide daemonsets
+        });
       } else {
-        console.error('Invalid response format for controllers');
+        console.error('❌ Invalid response format for controllers');
+        console.error('   - Response keys:', Object.keys(response || {}));
+        console.error('   - Has Status property:', response && 'Status' in response);
         // Set empty data on invalid response
         setData({
           namespace: ns,
@@ -92,7 +130,7 @@ const Workloads: React.FC = () => {
         });
       }
     } catch (err) {
-      console.error('Failed to fetch workload data:', err);
+      console.error('❌ Failed to fetch workload data for namespace', ns, ':', err);
       // Set empty data on error
       setData({
         namespace: ns,
@@ -102,6 +140,7 @@ const Workloads: React.FC = () => {
       });
     } finally {
       setLoading(false);
+      console.log('🔚 Finished fetchData for namespace:', ns);
     }
   };
 

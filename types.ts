@@ -30,6 +30,16 @@ export interface ControllerResource {
   port: number;
 }
 
+// New deployment response format from API
+export interface DeploymentResponse {
+  Status: Array<{
+    name: string;
+    replicas: number;
+    status: string;
+    update_time: string;
+  }>;
+}
+
 export interface NamespaceControllers {
   namespace: string;
   deployments: ControllerResource[];
