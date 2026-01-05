@@ -77,6 +77,11 @@ export interface NodeCountResponse {
   node_len: number;
 }
 
+// New interface for pod count API response
+export interface PodCountResponse {
+  pod_count: number;
+}
+
 export interface NodeDetail {
   name: string;
   status: string;

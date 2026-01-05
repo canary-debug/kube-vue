@@ -17,43 +17,44 @@ const Dashboard: React.FC = () => {
       try {
         console.log('🚀 Starting dashboard data fetch...');
         
-        // 使用正确的API端点获取节点数量，确保从后端获取真实数据
-        const nodeData = await request<{ node_len: number }>('/k8s/get/nodes/len');
-        console.log('📦 Node count API response:', nodeData);
-        console.log('🔑 Response keys:', Object.keys(nodeData || {}));
+        // 并行获取节点和Pod数量
+        const [nodeData, podData] = await Promise.all([
+          request<{ node_len: number }>('/k8s/get/nodes/len'),
+          request<{ pod_count: number }>('/k8s/get/pods/len')
+        ]);
         
-        // 提取节点数量，确保是数字类型
+        console.log('📦 Node count API response:', nodeData);
+        console.log('📦 Pod count API response:', podData);
+        
+        // 提取节点数量
         let nodeCount = 0;
         if (nodeData && typeof nodeData === 'object') {
-          // 检查是否有node_len属性
           if ('node_len' in nodeData) {
-            // 确保转换为数字类型
             nodeCount = parseInt(nodeData.node_len as unknown as string, 10);
-            console.log('📊 Extracted node count:', nodeCount, 'from node_len:', nodeData.node_len);
-          } 
-          // 检查是否有其他可能的属性名（如nodes或length）
-          else if ('nodes' in nodeData) {
-            nodeCount = parseInt(nodeData.nodes as unknown as string, 10);
-            console.log('📊 Extracted node count from nodes property:', nodeCount);
-          }
-          // 检查是否是数组格式
-          else if (Array.isArray(nodeData)) {
-            nodeCount = nodeData.length;
-            console.log('📊 Extracted node count from array length:', nodeCount);
+            console.log('📊 Extracted node count:', nodeCount);
           }
         }
         
-        console.log('📊 Final node count:', nodeCount);
+        // 提取Pod数量
+        let podCount = 0;
+        if (podData && typeof podData === 'object') {
+          if ('pod_count' in podData) {
+            podCount = parseInt(podData.pod_count as unknown as string, 10);
+            console.log('📊 Extracted pod count:', podCount);
+          }
+        }
         
-        // 对于pods和deployments，暂时设置为0，后续可添加真实数据获取
-        const pods = 0;
-        const deployments = 0;
+        console.log('📊 Final stats:', {
+          nodes: nodeCount,
+          pods: podCount,
+          deployments: 0 // Deployments暂时设置为0，后续可添加真实数据获取
+        });
         
         // 更新状态
         setStats({
           nodes: nodeCount,
-          pods: pods,
-          deployments: deployments
+          pods: podCount,
+          deployments: 0
         });
         
         console.log('✅ Dashboard stats updated successfully');
