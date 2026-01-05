@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { request } from '../utils/client';
-import { NamespaceControllers, NodeBrief, NodeCountResponse } from '../types';
+import { NamespaceControllers, NodeBrief, NodeCountResponse, PodCountResponse, ClusterHealthResponse } from '../types';
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({
@@ -9,7 +9,19 @@ const Dashboard: React.FC = () => {
     pods: 0,
     deployments: 0,
   });
+  const [clusterHealth, setClusterHealth] = useState<{
+    status: string;
+    reason?: string;
+    details?: {
+      unhealthy_pods: number;
+      crash_pods: number;
+      dns_active: boolean;
+    };
+  }>({
+    status: 'Healthy'
+  });
   const [loading, setLoading] = useState(true);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -17,7 +29,41 @@ const Dashboard: React.FC = () => {
       try {
         console.log('🚀 Starting dashboard data fetch...');
         
-        // 并行获取节点和Pod数量
+        // 直接调用fetch，不使用request工具，以排除工具函数的问题
+        const token = localStorage.getItem('k8s_token');
+        const healthUrl = 'http://localhost:9000/api/k8s/get/cluster_healthz';
+        console.log('📞 Direct API call to:', healthUrl);
+        console.log('🔑 Token available:', !!token);
+        
+        const healthResponse = await fetch(healthUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log('📊 Health API response status:', healthResponse.status);
+        console.log('📊 Health API response ok:', healthResponse.ok);
+        
+        const healthText = await healthResponse.text();
+        console.log('📦 Raw health API response text:', healthText);
+        
+        // 解析健康数据
+        const healthData = JSON.parse(healthText);
+        console.log('📋 Parsed health data:', healthData);
+        
+        // 更新集群健康状态
+        if (healthData && typeof healthData === 'object') {
+          setClusterHealth({
+            status: healthData.status || 'Healthy',
+            reason: healthData.reason,
+            details: healthData.details
+          });
+          console.log('📊 Updated cluster health:', healthData.status);
+        }
+        
+        // 获取其他数据
         const [nodeData, podData] = await Promise.all([
           request<{ node_len: number }>('/k8s/get/nodes/len'),
           request<{ pod_count: number }>('/k8s/get/pods/len')
@@ -60,11 +106,24 @@ const Dashboard: React.FC = () => {
         console.log('✅ Dashboard stats updated successfully');
       } catch (err) {
         console.error('❌ Error fetching dashboard data:', err);
-        // 错误时设置默认值为0
+        console.error('🔍 Error name:', err.name);
+        console.error('🔍 Error message:', err.message);
+        console.error('🔍 Error stack:', err.stack);
+        // 错误时设置默认值
         setStats({
           nodes: 0,
           pods: 0,
           deployments: 0
+        });
+        // 设置错误状态
+        setClusterHealth({
+          status: 'Error',
+          reason: err.message,
+          details: {
+            unhealthy_pods: 0,
+            crash_pods: 0,
+            dns_active: false
+          }
         });
       } finally {
         setLoading(false);
@@ -74,11 +133,21 @@ const Dashboard: React.FC = () => {
     fetchDashboardData();
   }, []);
 
+  // 定义哪些状态被视为不健康
+  const isUnhealthy = clusterHealth.status !== 'Healthy';
+  
   const statCards = [
     { label: 'Total Nodes', value: stats.nodes, icon: 'fa-server', color: 'blue' },
     { label: 'Running Pods', value: stats.pods, icon: 'fa-cube', color: 'green' },
     { label: 'Deployments', value: stats.deployments, icon: 'fa-layer-group', color: 'purple' },
-    { label: 'Cluster Health', value: 'Healthy', icon: 'fa-heartbeat', color: 'emerald' },
+    { 
+      label: 'Cluster Health', 
+      value: clusterHealth.status, 
+      // 根据健康状态动态设置图标和颜色
+      icon: isUnhealthy ? 'fa-heart-crack' : 'fa-heartbeat', 
+      color: isUnhealthy ? 'red' : 'emerald',
+      hasTooltip: isUnhealthy // 只有在不健康状态下显示tooltip
+    },
   ];
 
   return (
@@ -87,13 +156,39 @@ const Dashboard: React.FC = () => {
         {statCards.map((stat, idx) => (
           <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
             <div className="flex items-center justify-between mb-4">
-              <div className={`w-12 h-12 bg-${stat.color}-100 text-${stat.color}-600 rounded-lg flex items-center justify-center text-xl`}>
+              <div 
+                className={`w-12 h-12 bg-${stat.color}-100 text-${stat.color}-600 rounded-lg flex items-center justify-center text-xl relative`}
+                onMouseEnter={() => stat.hasTooltip && setShowTooltip(true)}
+                onMouseLeave={() => setShowTooltip(false)}
+              >
                 <i className={`fas ${stat.icon}`}></i>
+                {/* 显示问号图标 */}
+                {stat.hasTooltip && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-${stat.color}-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                    ?
+                  </span>
+                )}
+                {/* Tooltip显示详细信息 */}
+                {stat.hasTooltip && showTooltip && (
+                  <div className="absolute -right-60 top-14 z-50 w-56 bg-slate-800 text-white p-3 rounded-lg shadow-xl text-sm">
+                    <h4 className="font-semibold text-red-400 mb-2">Cluster {clusterHealth.status}</h4>
+                    <p className="mb-2 text-sm">{clusterHealth.reason}</p>
+                    {clusterHealth.details && (
+                      <div className="space-y-1">
+                        <p>Unhealthy Pods: {clusterHealth.details.unhealthy_pods}</p>
+                        <p>Crash Loop Pods: {clusterHealth.details.crash_pods}</p>
+                        <p>DNS Active: {clusterHealth.details.dns_active ? 'Yes' : 'No'}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Statistics</span>
             </div>
             <h3 className="text-slate-500 text-sm font-medium">{stat.label}</h3>
-            <p className="text-2xl font-bold text-slate-800 mt-1">{loading ? '...' : stat.value}</p>
+            <p className={`text-2xl font-bold mt-1 ${isUnhealthy ? 'text-red-600' : 'text-slate-800'}`}>
+              {loading ? '...' : stat.value}
+            </p>
           </div>
         ))}
       </div>

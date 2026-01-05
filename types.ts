@@ -82,6 +82,17 @@ export interface PodCountResponse {
   pod_count: number;
 }
 
+// New interface for cluster health API response
+export interface ClusterHealthResponse {
+  status: string;
+  reason?: string;
+  details?: {
+    unhealthy_pods: number;
+    crash_pods: number;
+    dns_active: boolean;
+  };
+}
+
 export interface NodeDetail {
   name: string;
   status: string;
