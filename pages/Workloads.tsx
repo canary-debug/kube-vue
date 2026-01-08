@@ -11,6 +11,17 @@ const Workloads: React.FC = () => {
   const [namespaceLoading, setNamespaceLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'deployments' | 'statefulsets' | 'daemonsets'>('deployments');
   const [restarting, setRestarting] = useState<string | null>(null); // 用于跟踪正在重启的Deployment
+  
+  // 通知状态管理
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'success' | 'error';
+    visible: boolean;
+  }>({
+    message: '',
+    type: 'success',
+    visible: false
+  });
 
   const fetchNamespaces = async () => {
     setNamespaceLoading(true);
@@ -157,6 +168,20 @@ const Workloads: React.FC = () => {
     }
   }, [selectedNamespace]);
 
+  // 显示通知的函数
+  const showNotification = (message: string, type: 'success' | 'error') => {
+    setNotification({
+      message: message,
+      type: type,
+      visible: true
+    });
+    
+    // 3秒后自动隐藏通知
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, visible: false }));
+    }, 3000);
+  };
+  
   // 重启Deployment的函数
   const handleRestartDeployment = async (name: string) => {
     try {
@@ -177,12 +202,12 @@ const Workloads: React.FC = () => {
       // 重启成功后刷新数据
       await fetchData(selectedNamespace);
       
-      // 显示成功提示（可以根据需要添加Toast或其他提示）
-      alert(`Deployment ${name} 已成功重启`);
+      // 显示成功通知
+      showNotification(`Deployment ${name} 已成功重启`, 'success');
     } catch (err) {
       console.error('❌ Failed to restart Deployment:', err);
-      // 显示错误提示
-      alert(`重启 Deployment ${name} 失败: ${err.message}`);
+      // 显示错误通知
+      showNotification(`重启 Deployment ${name} 失败: ${err.message}`, 'error');
     } finally {
       setRestarting(null); // 清除重启状态
     }
@@ -192,6 +217,18 @@ const Workloads: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* 通知组件 */}
+      {notification.visible && (
+        <div className={`fixed top-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg transition-all duration-300 ease-in-out transform translate-y-0 opacity-100
+          ${notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}
+        `}>
+          <div className="flex items-center gap-2">
+            <i className={`fas ${notification.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}`}></i>
+            <span className="font-medium">{notification.message}</span>
+          </div>
+        </div>
+      )}
+      
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <label className="text-sm font-medium text-slate-600">Namespace:</label>
