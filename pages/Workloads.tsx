@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { request } from '../utils/client';
-import { NamespaceControllers, ControllerResource, NamespaceListResponse, NamespaceControllersResponse } from '../types';
+import { NamespaceControllers, ControllerResource, NamespaceListResponse, NamespaceControllersResponse, DeploymentResponse } from '../types';
 
 const Workloads: React.FC = () => {
   const [namespaces, setNamespaces] = useState<string[]>([]);
@@ -10,6 +10,7 @@ const Workloads: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [namespaceLoading, setNamespaceLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'deployments' | 'statefulsets' | 'daemonsets'>('deployments');
+  const [restarting, setRestarting] = useState<string | null>(null); // 用于跟踪正在重启的Deployment
 
   const fetchNamespaces = async () => {
     setNamespaceLoading(true);
@@ -156,6 +157,37 @@ const Workloads: React.FC = () => {
     }
   }, [selectedNamespace]);
 
+  // 重启Deployment的函数
+  const handleRestartDeployment = async (name: string) => {
+    try {
+      setRestarting(name); // 设置正在重启的Deployment名称
+      console.log(`🔄 Restarting Deployment: ${name} in namespace: ${selectedNamespace}`);
+      
+      // 发送POST请求到重启接口
+      const response = await request<any>('/k8s/restart/deployment', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name,
+          namespace: selectedNamespace
+        })
+      });
+      
+      console.log('✅ Deployment restarted successfully:', response);
+      
+      // 重启成功后刷新数据
+      await fetchData(selectedNamespace);
+      
+      // 显示成功提示（可以根据需要添加Toast或其他提示）
+      alert(`Deployment ${name} 已成功重启`);
+    } catch (err) {
+      console.error('❌ Failed to restart Deployment:', err);
+      // 显示错误提示
+      alert(`重启 Deployment ${name} 失败: ${err.message}`);
+    } finally {
+      setRestarting(null); // 清除重启状态
+    }
+  };
+
   const resources = data ? data[activeTab] : [];
 
   return (
@@ -254,7 +286,17 @@ const Workloads: React.FC = () => {
                       {new Date(item.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
-                      <button className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition-colors text-sm">Restart</button>
+                      <button 
+                        className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleRestartDeployment(item.name)}
+                        disabled={restarting === item.name}
+                      >
+                        {restarting === item.name ? (
+                          <i className="fas fa-spinner fa-spin"></i>
+                        ) : (
+                          'Restart'
+                        )}
+                      </button>
                       <button className="text-slate-400 hover:text-red-600 px-3 py-1 rounded transition-colors"><i className="fas fa-ellipsis-v"></i></button>
                     </td>
                   </tr>
