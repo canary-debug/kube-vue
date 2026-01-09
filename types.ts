@@ -93,6 +93,25 @@ export interface ClusterHealthResponse {
   };
 }
 
+// Interface for Pod information
+export interface PodInfo {
+  name: string;
+  status: string;
+  restart_count: number;
+  ports: number[] | null;
+  node_name: string;
+  pod_ip: string;
+  created_at: string;
+  labels: Record<string, string>;
+}
+
+// Interface for deployment pods API response
+export interface DeploymentPodsResponse {
+  data: PodInfo[];
+  total: number;
+  message: string;
+}
+
 export interface NodeDetail {
   name: string;
   status: string;

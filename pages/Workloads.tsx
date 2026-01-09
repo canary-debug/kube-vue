@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { request } from '../utils/client';
-import { NamespaceControllers, ControllerResource, NamespaceListResponse, NamespaceControllersResponse, DeploymentResponse } from '../types';
+import { NamespaceControllers, ControllerResource, NamespaceListResponse, NamespaceControllersResponse, DeploymentResponse, PodInfo, DeploymentPodsResponse } from '../types';
 
 const Workloads: React.FC = () => {
   const [namespaces, setNamespaces] = useState<string[]>([]);
@@ -22,6 +22,12 @@ const Workloads: React.FC = () => {
     type: 'success',
     visible: false
   });
+  
+  // Pod信息状态管理
+  const [selectedDeployment, setSelectedDeployment] = useState<string | null>(null); // 当前选中的Deployment名称
+  const [podsData, setPodsData] = useState<PodInfo[]>([]); // 选中Deployment的Pod列表
+  const [podsLoading, setPodsLoading] = useState(false); // Pod数据加载状态
+  const [showPodDetails, setShowPodDetails] = useState(false); // 是否显示Pod详情面板
 
   const fetchNamespaces = async () => {
     setNamespaceLoading(true);
@@ -182,6 +188,35 @@ const Workloads: React.FC = () => {
     }, 3000);
   };
   
+  // 获取Deployment的Pod信息
+  const fetchDeploymentPods = async (name: string) => {
+    try {
+      setPodsLoading(true);
+      console.log(`🔍 Fetching Pods for Deployment: ${name} in namespace: ${selectedNamespace}`);
+      
+      // 发送POST请求到获取Pod信息接口
+      const response = await request<DeploymentPodsResponse>('/k8s/deployment/pods', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name,
+          namespace: selectedNamespace
+        })
+      });
+      
+      console.log('✅ Pods fetched successfully:', response);
+      
+      // 更新Pod数据
+      setPodsData(response.data || []);
+      setSelectedDeployment(name);
+      setShowPodDetails(true);
+    } catch (err) {
+      console.error('❌ Failed to fetch Deployment Pods:', err);
+      showNotification(`获取 Deployment ${name} 的 Pod 信息失败: ${err.message}`, 'error');
+    } finally {
+      setPodsLoading(false);
+    }
+  };
+  
   // 重启Deployment的函数
   const handleRestartDeployment = async (name: string) => {
     try {
@@ -295,7 +330,14 @@ const Workloads: React.FC = () => {
               ) : (
                 resources.map((item: ControllerResource, idx: number) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-slate-800">{item.name}</td>
+                    <td className="px-6 py-4 font-medium">
+                      <button 
+                        className="text-blue-600 hover:underline cursor-pointer"
+                        onClick={() => fetchDeploymentPods(item.name)}
+                      >
+                        {item.name}
+                      </button>
+                    </td>
                     <td className="px-6 py-4">
                       {item.images.map((img, i) => (
                         <div key={i} className="text-xs text-slate-500 truncate max-w-[200px]" title={img}>
@@ -343,6 +385,72 @@ const Workloads: React.FC = () => {
           </table>
         </div>
       </div>
+      
+      {/* Pod详情面板 */}
+      {showPodDetails && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex justify-between items-center p-6 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">
+                {selectedDeployment} - Pods ({podsData.length})
+              </h2>
+              <p className="text-sm text-slate-500">Namespace: {selectedNamespace}</p>
+            </div>
+            <button 
+              className="text-slate-400 hover:text-slate-600" 
+              onClick={() => setShowPodDetails(false)}
+            >
+              <i className="fas fa-times text-lg"></i>
+            </button>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                  <th className="px-6 py-4 font-semibold">Pod Name</th>
+                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="px-6 py-4 font-semibold">Restarts</th>
+                  <th className="px-6 py-4 font-semibold">Node</th>
+                  <th className="px-6 py-4 font-semibold">Pod IP</th>
+                  <th className="px-6 py-4 font-semibold">Created At</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {podsLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                      <i className="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                      <p>Loading pods...</p>
+                    </td>
+                  </tr>
+                ) : podsData.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">No pods found for this deployment</td>
+                  </tr>
+                ) : (
+                  podsData.map((pod, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-slate-800">{pod.name}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${pod.status === 'Running' ? 'bg-green-100 text-green-800' : pod.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+                          {pod.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">{pod.restart_count}</td>
+                      <td className="px-6 py-4 text-slate-600">{pod.node_name}</td>
+                      <td className="px-6 py-4 text-slate-600">{pod.pod_ip}</td>
+                      <td className="px-6 py-4 text-xs text-slate-500">
+                        {new Date(pod.created_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
