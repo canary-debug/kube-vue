@@ -112,6 +112,21 @@ export interface DeploymentPodsResponse {
   message: string;
 }
 
+// Interface for ETCD status
+export interface EtcdStatus {
+  name: string;
+  healthy: boolean;
+  message?: string;
+  ip?: string;
+}
+
+// Interface for ETCD status API response
+export interface EtcdStatusResponse {
+  data: EtcdStatus[];
+  total: number;
+  message: string;
+}
+
 export interface NodeDetail {
   name: string;
   status: string;

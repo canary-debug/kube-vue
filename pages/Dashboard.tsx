@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { request } from '../utils/client';
-import { NamespaceControllers, NodeBrief, NodeCountResponse, PodCountResponse, ClusterHealthResponse } from '../types';
+import { NamespaceControllers, NodeBrief, NodeCountResponse, PodCountResponse, ClusterHealthResponse, EtcdStatus, EtcdStatusResponse } from '../types';
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({
@@ -20,6 +20,7 @@ const Dashboard: React.FC = () => {
   }>({
     status: 'Healthy'
   });
+  const [etcdStatuses, setEtcdStatuses] = useState<EtcdStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -63,14 +64,34 @@ const Dashboard: React.FC = () => {
           console.log('📊 Updated cluster health:', healthData.status);
         }
         
-        // 获取其他数据
-        const [nodeData, podData] = await Promise.all([
+        // 获取其他数据，包括ETCD状态
+        const [nodeData, podData, etcdResponse] = await Promise.all([
           request<{ node_len: number }>('/k8s/get/nodes/len'),
-          request<{ pod_count: number }>('/k8s/get/pods/len')
+          request<{ pod_count: number }>('/k8s/get/pods/len'),
+          fetch('http://localhost:9000/api/k8s/etcd/status', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          })
         ]);
         
         console.log('📦 Node count API response:', nodeData);
         console.log('📦 Pod count API response:', podData);
+        
+        // 处理ETCD响应
+        console.log('📊 ETCD API response status:', etcdResponse.status);
+        const etcdText = await etcdResponse.text();
+        console.log('📦 Raw ETCD API response text:', etcdText);
+        const etcdData = JSON.parse(etcdText);
+        console.log('📋 Parsed ETCD data:', etcdData);
+        
+        // 更新ETCD状态
+        if (etcdData && Array.isArray(etcdData.data)) {
+          setEtcdStatuses(etcdData.data);
+          console.log('📊 Updated ETCD statuses:', etcdData.data.length, 'nodes');
+        }
         
         // 提取节点数量
         let nodeCount = 0;
@@ -136,10 +157,21 @@ const Dashboard: React.FC = () => {
   // 定义哪些状态被视为不健康
   const isUnhealthy = clusterHealth.status !== 'Healthy';
   
+  // 计算健康的ETCD节点数量
+  const healthyEtcdNodes = etcdStatuses.filter(node => node.healthy).length;
+  const totalEtcdNodes = etcdStatuses.length;
+  
   const statCards = [
     { label: 'Total Nodes', value: stats.nodes, icon: 'fa-server', color: 'blue' },
     { label: 'Running Pods', value: stats.pods, icon: 'fa-cube', color: 'green' },
-    { label: 'Deployments', value: stats.deployments, icon: 'fa-layer-group', color: 'purple' },
+    { 
+      label: 'ETCD Status', 
+      value: `${healthyEtcdNodes}/${totalEtcdNodes} Healthy`, 
+      icon: 'fa-database', 
+      color: healthyEtcdNodes === totalEtcdNodes ? 'emerald' : 'red',
+      hasTooltip: totalEtcdNodes > 0, // 只有当有ETCD节点时显示tooltip
+      etcdStatuses: etcdStatuses // 传递ETCD状态数据
+    },
     { 
       label: 'Cluster Health', 
       value: clusterHealth.status, 
@@ -171,15 +203,42 @@ const Dashboard: React.FC = () => {
                 {/* Tooltip显示详细信息 */}
                 {stat.hasTooltip && showTooltip && (
                   <div className="absolute -right-60 top-14 z-50 w-56 bg-slate-800 text-white p-3 rounded-lg shadow-xl text-sm">
-                    <h4 className="font-semibold text-red-400 mb-2">Cluster {clusterHealth.status}</h4>
-                    <p className="mb-2 text-sm">{clusterHealth.reason}</p>
-                    {clusterHealth.details && (
-                      <div className="space-y-1">
-                        <p>Unhealthy Pods: {clusterHealth.details.unhealthy_pods}</p>
-                        <p>Crash Loop Pods: {clusterHealth.details.crash_pods}</p>
-                        <p>DNS Active: {clusterHealth.details.dns_active ? 'Yes' : 'No'}</p>
-                      </div>
-                    )}
+                    {/* 根据卡片类型显示不同的tooltip内容 */}
+                    {stat.label === 'Cluster Health' ? (
+                      // 集群健康状态的tooltip
+                      <>
+                        <h4 className="font-semibold text-red-400 mb-2">Cluster {clusterHealth.status}</h4>
+                        <p className="mb-2 text-sm">{clusterHealth.reason}</p>
+                        {clusterHealth.details && (
+                          <div className="space-y-1">
+                            <p>Unhealthy Pods: {clusterHealth.details.unhealthy_pods}</p>
+                            <p>Crash Loop Pods: {clusterHealth.details.crash_pods}</p>
+                            <p>DNS Active: {clusterHealth.details.dns_active ? 'Yes' : 'No'}</p>
+                          </div>
+                        )}
+                      </>
+                    ) : stat.label === 'ETCD Status' ? (
+                      // ETCD状态的tooltip
+                      <>
+                        <h4 className="font-semibold text-red-400 mb-2">ETCD Nodes</h4>
+                        <div className="space-y-2">
+                          {stat.etcdStatuses.map((node, idx) => (
+                            <div key={idx} className="border-b border-slate-700 pb-2 last:border-b-0 last:pb-0">
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium">{node.name}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${node.healthy ? 'bg-green-600' : 'bg-red-600'}`}>
+                                  {node.healthy ? 'Healthy' : 'Unhealthy'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-xs text-slate-400 mt-1">
+                                <span>IP: {node.ip || '-'}</span>
+                                {node.message && <span className="text-red-400">{node.message}</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 )}
               </div>
