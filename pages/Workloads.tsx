@@ -171,6 +171,10 @@ const Workloads: React.FC = () => {
     // Only fetch data if we have a valid namespace
     if (selectedNamespace && selectedNamespace.trim()) {
       fetchData(selectedNamespace);
+      // 当命名空间改变时，关闭Pod详情面板并清除相关状态
+      setShowPodDetails(false);
+      setSelectedDeployment(null);
+      setPodsData([]);
     }
   }, [selectedNamespace]);
 
@@ -413,20 +417,21 @@ const Workloads: React.FC = () => {
                   <th className="px-6 py-4 font-semibold">Restarts</th>
                   <th className="px-6 py-4 font-semibold">Node</th>
                   <th className="px-6 py-4 font-semibold">Pod IP</th>
+                  <th className="px-6 py-4 font-semibold">Ports</th>
                   <th className="px-6 py-4 font-semibold">Created At</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {podsLoading ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                    <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
                       <i className="fas fa-spinner fa-spin text-2xl mb-2"></i>
                       <p>Loading pods...</p>
                     </td>
                   </tr>
                 ) : podsData.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">No pods found for this deployment</td>
+                    <td colSpan={7} className="px-6 py-12 text-center text-slate-400">No pods found for this deployment</td>
                   </tr>
                 ) : (
                   podsData.map((pod, idx) => (
@@ -440,6 +445,17 @@ const Workloads: React.FC = () => {
                       <td className="px-6 py-4 text-slate-600">{pod.restart_count}</td>
                       <td className="px-6 py-4 text-slate-600">{pod.node_name}</td>
                       <td className="px-6 py-4 text-slate-600">{pod.pod_ip}</td>
+                      <td className="px-6 py-4">
+                        {pod.ports && pod.ports.length > 0 ? (
+                          pod.ports.map((port, i) => (
+                            <span key={i} className="inline-block bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 text-xs mr-1 mb-1">
+                              {port}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-400 text-xs">-</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-xs text-slate-500">
                         {new Date(pod.created_at).toLocaleString()}
                       </td>
