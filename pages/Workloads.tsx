@@ -28,6 +28,17 @@ const Workloads: React.FC = () => {
   const [podsData, setPodsData] = useState<PodInfo[]>([]); // 选中Deployment的Pod列表
   const [podsLoading, setPodsLoading] = useState(false); // Pod数据加载状态
   const [showPodDetails, setShowPodDetails] = useState(false); // 是否显示Pod详情面板
+  
+  // 日志相关状态管理
+  const [selectedPod, setSelectedPod] = useState<string | null>(null); // 当前选中的Pod名称
+  const [logsContent, setLogsContent] = useState<string>(''); // 日志内容
+  const [logsLoading, setLogsLoading] = useState(false); // 日志加载状态
+  const [showLogsPanel, setShowLogsPanel] = useState(false); // 是否显示日志面板
+  const [tailLines, setTailLines] = useState<number>(100); // 日志行数，默认100
+  const [followLogs, setFollowLogs] = useState<boolean>(false); // 是否实时跟踪日志
+  
+  // 使用ref来存储abortController，确保能立即访问到最新实例
+  const abortControllerRef = React.useRef<AbortController | null>(null);
 
   const fetchNamespaces = async () => {
     setNamespaceLoading(true);
@@ -213,6 +224,17 @@ const Workloads: React.FC = () => {
       setPodsData(response.data || []);
       setSelectedDeployment(name);
       setShowPodDetails(true);
+      
+      // 关闭日志面板（如果打开的话）
+      setShowLogsPanel(false);
+      setSelectedPod(null);
+      setLogsContent('');
+      // 关闭SSE连接
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setFollowLogs(false);
     } catch (err) {
       console.error('❌ Failed to fetch Deployment Pods:', err);
       showNotification(`获取 Deployment ${name} 的 Pod 信息失败: ${err.message}`, 'error');
@@ -249,6 +271,191 @@ const Workloads: React.FC = () => {
       showNotification(`重启 Deployment ${name} 失败: ${err.message}`, 'error');
     } finally {
       setRestarting(null); // 清除重启状态
+    }
+  };
+  
+  // 获取Pod日志的函数（GET请求）
+  const fetchLogs = async (podName: string, namespace: string, tail: number, follow: boolean) => {
+    try {
+      setLogsLoading(true);
+      // 关闭之前的SSE连接
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      // 重置状态
+      setFollowLogs(false);
+      
+      // 优化日志行数处理：如果tail为0或空，使用默认值100
+      const actualTail = tail || 100;
+      // 更新tailLines状态，确保UI显示正确的值
+      if (tailLines !== actualTail) {
+        setTailLines(actualTail);
+      }
+      
+      const apiUrl = `/k8s/pod/logs/${encodeURIComponent(namespace)}/${encodeURIComponent(podName)}?tail=${actualTail}`;
+      console.log('🔗 Fetching logs from:', apiUrl);
+      
+      const response = await request<string>(apiUrl, {
+        method: 'GET'
+      }, false);
+      
+      console.log('✅ Logs fetched successfully');
+      setLogsContent(response);
+      
+      // 如果需要实时跟踪，启动SSE连接
+      if (follow) {
+        startSSELogs(podName, namespace, actualTail);
+      }
+    } catch (err) {
+      console.error('❌ Failed to fetch logs:', err);
+      showNotification(`获取日志失败: ${err.message}`, 'error');
+      setLogsContent(`Error fetching logs: ${err.message}`);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+  
+  // 启动SSE连接获取实时日志
+  const startSSELogs = (podName: string, namespace: string, tail: number) => {
+    try {
+      // 如果已经有活跃的连接，先关闭
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      
+      // 创建新的AbortController
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      
+      const token = localStorage.getItem('k8s_token');
+      // 使用相对URL，并添加API_BASE前缀，与request函数保持一致
+      const API_BASE = '/api';
+      const apiUrl = `${API_BASE}/k8s/pod/logs/${encodeURIComponent(namespace)}/${encodeURIComponent(podName)}?tail=${tail}&follow=true`;
+      
+      console.log('🔗 Starting SSE logs from:', apiUrl);
+      
+      // 使用fetch API创建一个带有headers和signal的连接
+      fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'text/event-stream'
+        },
+        cache: 'no-cache',
+        credentials: 'include',
+        signal: controller.signal // 添加signal用于取消请求
+      }).then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // 检查是否是SSE响应
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('text/event-stream')) {
+          throw new Error('Expected text/event-stream response');
+        }
+        
+        // 创建一个自定义的EventSource-like对象
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('No readable stream');
+        }
+        
+        let buffer = '';
+        
+        // 处理流数据
+        const processStream = async () => {
+          try {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              // 流结束
+              showNotification('实时日志连接已断开', 'error');
+              setFollowLogs(false);
+              abortControllerRef.current = null;
+              return;
+            }
+            
+            // 将新数据添加到缓冲区
+            buffer += new TextDecoder().decode(value);
+            
+            // 处理缓冲区中的事件
+            const events = buffer.split('\n\n');
+            buffer = events.pop() || '';
+            
+            for (const event of events) {
+              if (!event.trim()) continue;
+              
+              // 解析事件数据
+              const lines = event.split('\n');
+              let data = '';
+              
+              for (const line of lines) {
+                if (line.startsWith('data:')) {
+                  const lineData = line.slice(5).trim();
+                  if (lineData) { // 只处理非空数据行
+                    data += lineData + '\n';
+                  }
+                }
+              }
+              
+              if (data) {
+                // 更新日志内容
+                setLogsContent(prev => prev + data);
+              }
+            }
+            
+            // 继续处理流
+            processStream();
+          } catch (err: any) {
+            // 检查是否是由于abort导致的错误
+            if (err.name !== 'AbortError') {
+              console.error('❌ SSE stream processing error:', err);
+              showNotification('实时日志连接已断开', 'error');
+            }
+            setFollowLogs(false);
+            abortControllerRef.current = null;
+          }
+        };
+        
+        // 开始处理流
+        processStream();
+        setFollowLogs(true);
+        
+      }).catch((err: any) => {
+        // 检查是否是由于abort导致的错误
+        if (err.name !== 'AbortError') {
+          console.error('❌ SSE connection error:', err);
+          showNotification(`启动实时日志失败: ${err.message}`, 'error');
+        }
+        setFollowLogs(false);
+        abortControllerRef.current = null;
+      });
+    } catch (err: any) {
+      console.error('❌ Failed to start SSE logs:', err);
+      showNotification(`启动实时日志失败: ${err.message}`, 'error');
+      setFollowLogs(false);
+      abortControllerRef.current = null;
+    }
+  };
+  
+  // 切换实时日志跟踪状态
+  const toggleFollowLogs = () => {
+    if (!selectedPod) return;
+    
+    if (followLogs) {
+      // 关闭实时跟踪
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      // 先设置followLogs为false，确保UI立即更新
+      setFollowLogs(false);
+    } else {
+      // 开启实时跟踪
+      startSSELogs(selectedPod, selectedNamespace, tailLines);
     }
   };
 
@@ -419,19 +626,20 @@ const Workloads: React.FC = () => {
                   <th className="px-6 py-4 font-semibold">Pod IP</th>
                   <th className="px-6 py-4 font-semibold">Ports</th>
                   <th className="px-6 py-4 font-semibold">Created At</th>
+                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {podsLoading ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
                       <i className="fas fa-spinner fa-spin text-2xl mb-2"></i>
                       <p>Loading pods...</p>
                     </td>
                   </tr>
                 ) : podsData.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-400">No pods found for this deployment</td>
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-400">No pods found for this deployment</td>
                   </tr>
                 ) : (
                   podsData.map((pod, idx) => (
@@ -459,11 +667,137 @@ const Workloads: React.FC = () => {
                       <td className="px-6 py-4 text-xs text-slate-500">
                         {new Date(pod.created_at).toLocaleString()}
                       </td>
+                      <td className="px-6 py-4 text-right">
+                        <button 
+              className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition-colors text-sm"
+              onClick={() => {
+                // 点击新Pod时，先关闭当前日志面板，再重新初始化
+                setShowLogsPanel(false);
+                // 使用setTimeout确保状态更新后再执行后续操作
+                setTimeout(() => {
+                  // 清除之前的日志和状态
+                  setSelectedPod(pod.name);
+                  setLogsContent('');
+                  setFollowLogs(false);
+                  setTailLines(100); // 重置为默认值100行
+                  // 关闭之前的SSE连接
+                  if (abortControllerRef.current) {
+                    abortControllerRef.current.abort();
+                    abortControllerRef.current = null;
+                  }
+                  setShowLogsPanel(true);
+                  // 初始加载日志
+                  fetchLogs(pod.name, selectedNamespace, 100, false);
+                }, 0);
+              }}
+            >
+              <i className="fas fa-file-alt mr-1"></i> Logs
+            </button>
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+      
+      {/* 日志面板 */}
+      {showLogsPanel && selectedPod && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex justify-between items-center p-6 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">
+                {selectedPod} - Logs
+              </h2>
+              <p className="text-sm text-slate-500">Namespace: {selectedNamespace}</p>
+            </div>
+            <button 
+              className="text-slate-400 hover:text-slate-600" 
+              onClick={() => {
+                // 关闭日志面板时断开SSE连接并重置状态
+                if (abortControllerRef.current) {
+                  abortControllerRef.current.abort();
+                  abortControllerRef.current = null;
+                }
+                setFollowLogs(false);
+                setShowLogsPanel(false);
+                setSelectedPod(null);
+                setLogsContent('');
+              }}
+            >
+              <i className="fas fa-times text-lg"></i>
+            </button>
+          </div>
+          
+          {/* 日志控制面板 */}
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-slate-600">Tail Lines:</label>
+              <input 
+                type="text" 
+                maxLength={4}
+                value={tailLines === 0 ? '' : tailLines}
+                onChange={(e) => {
+                  // 允许完全清空输入框
+                  const value = e.target.value;
+                  if (value === '') {
+                    // 允许状态为0，后续在fetchLogs中处理
+                    setTailLines(0);
+                    return;
+                  }
+                  // 只允许输入数字
+                  if (/^\d*$/.test(value)) {
+                    const numValue = parseInt(value) || 0;
+                    setTailLines(numValue);
+                  }
+                }}
+                onKeyPress={(e) => {
+                  // 允许通过回车键刷新日志
+                  if (e.key === 'Enter' && selectedPod) {
+                    fetchLogs(selectedPod, selectedNamespace, tailLines, false);
+                  }
+                }}
+                className="w-20 px-3 py-1.5 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-slate-600">Follow:</label>
+              <button 
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${followLogs ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'}`}
+                onClick={() => toggleFollowLogs()}
+                disabled={logsLoading}
+              >
+                {followLogs ? 'Following' : 'Follow'}
+              </button>
+            </div>
+            
+            <button 
+              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => fetchLogs(selectedPod, selectedNamespace, tailLines, false)}
+              disabled={logsLoading}
+            >
+              {logsLoading ? (
+                <i className="fas fa-spinner fa-spin mr-1"></i>
+              ) : (
+                <i className="fas fa-sync-alt mr-1"></i>
+              )}
+              Refresh
+            </button>
+          </div>
+          
+          {/* 日志内容展示区域 */}
+          <div className="p-6 bg-slate-900 rounded-b-xl overflow-auto max-h-96">
+            {logsLoading ? (
+              <div className="text-center py-8 text-slate-400">
+                <i className="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                <p>Loading logs...</p>
+              </div>
+            ) : (
+              <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono">{logsContent || 'No logs available'}</pre>
+            )}
           </div>
         </div>
       )}
