@@ -28,7 +28,8 @@ const Dashboard: React.FC = () => {
   const [weather, setWeather] = useState({
     temp: 0,
     dressing: '',
-    dressing_detail: ''
+    dressing_detail: '',
+    time_of_day: '早安'
   });
   const [weatherLoading, setWeatherLoading] = useState(true);
 
@@ -112,17 +113,36 @@ const Dashboard: React.FC = () => {
         console.log('📊 Weather API response status:', weatherResponse.status);
         const weatherText = await weatherResponse.text();
         console.log('📦 Raw weather API response text:', weatherText);
-        const weatherData = JSON.parse(weatherText);
-        console.log('📋 Parsed weather data:', weatherData);
         
-        // 更新天气状态
-        if (weatherData && weatherData.code === 200 && weatherData.data) {
-          setWeather({
-            temp: weatherData.data.temp || 0,
-            dressing: weatherData.data.dressing || '',
-            dressing_detail: weatherData.data.dressing_detail || ''
-          });
-          console.log('📊 Updated weather data:', weatherData.data);
+        try {
+          const weatherData = JSON.parse(weatherText);
+          console.log('📋 Parsed weather data:', weatherData);
+          
+          // 检查是否包含data字段
+          if (!weatherData.data) {
+            console.error('❌ Weather data missing data field:', weatherData);
+          } else {
+            // 检查data字段是否包含time_of_day
+            console.log('🔍 Checking time_of_day in weatherData.data:', 'time_of_day' in weatherData.data, 'value:', weatherData.data.time_of_day);
+            
+            // 打印weatherData.data的所有键，查看实际返回的字段名
+            console.log('🔑 Weather data keys:', Object.keys(weatherData.data));
+          }
+          
+          // 更新天气状态
+          if (weatherData && weatherData.code === 200 && weatherData.data) {
+            const updatedWeather = {
+              temp: weatherData.data.temp || 0,
+              dressing: weatherData.data.dressing || '',
+              dressing_detail: weatherData.data.dressing_detail || '',
+              time_of_day: weatherData.data['time_of_day'] || '早安' // 使用方括号语法确保正确获取字段
+            };
+            setWeather(updatedWeather);
+            console.log('✅ Updated weather with time_of_day:', updatedWeather.time_of_day);
+          }
+        } catch (parseError) {
+          console.error('❌ Failed to parse weather response:', parseError);
+          console.error('📦 Raw text that caused parsing error:', weatherText);
         }
         setWeatherLoading(false);
         
@@ -221,12 +241,14 @@ const Dashboard: React.FC = () => {
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-slate-800">早安，管理员，请开始一天的工作吧</h1>
-            <p className="text-sm text-slate-500 mt-1">
-              今日温度 {weatherLoading ? '...' : `${weather.temp}°C`}，{weatherLoading ? '正在获取天气信息...' : weather.dressing}。
-              {!weatherLoading && weather.dressing_detail}
-            </p>
-          </div>
+              <h1 className="text-xl font-bold text-slate-800">
+                {weatherLoading ? '加载中...' : (weather.time_of_day || '早安')}，管理员，请开始一天的工作吧
+              </h1>
+              <p className="text-sm text-slate-500 mt-1">
+                今日温度 {weatherLoading ? '...' : `${weather.temp}°C`}，{weatherLoading ? '正在获取天气信息...' : weather.dressing}。
+                {!weatherLoading && weather.dressing_detail}
+              </p>
+            </div>
           <div className="flex items-center gap-3 bg-slate-50 px-4 py-3 rounded-lg">
             <div className="text-3xl text-blue-600">
               <i className="fas fa-sun"></i>
