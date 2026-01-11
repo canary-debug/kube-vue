@@ -23,6 +23,14 @@ const Dashboard: React.FC = () => {
   const [etcdStatuses, setEtcdStatuses] = useState<EtcdStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTooltip, setShowTooltip] = useState(false);
+  
+  // 天气相关状态
+  const [weather, setWeather] = useState({
+    temp: 0,
+    dressing: '',
+    dressing_detail: ''
+  });
+  const [weatherLoading, setWeatherLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -64,11 +72,18 @@ const Dashboard: React.FC = () => {
           console.log('📊 Updated cluster health:', healthData.status);
         }
         
-        // 获取其他数据，包括ETCD状态
-        const [nodeData, podData, etcdResponse] = await Promise.all([
+        // 获取其他数据，包括ETCD状态和天气信息
+        const [nodeData, podData, etcdResponse, weatherResponse] = await Promise.all([
           request<{ node_len: number }>('/k8s/get/nodes/len'),
           request<{ pod_count: number }>('/k8s/get/pods/len'),
           fetch('http://localhost:9000/api/k8s/etcd/status', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }),
+          fetch('http://localhost:9000/api/k8s/weather', {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -92,6 +107,24 @@ const Dashboard: React.FC = () => {
           setEtcdStatuses(etcdData.data);
           console.log('📊 Updated ETCD statuses:', etcdData.data.length, 'nodes');
         }
+        
+        // 处理天气响应
+        console.log('📊 Weather API response status:', weatherResponse.status);
+        const weatherText = await weatherResponse.text();
+        console.log('📦 Raw weather API response text:', weatherText);
+        const weatherData = JSON.parse(weatherText);
+        console.log('📋 Parsed weather data:', weatherData);
+        
+        // 更新天气状态
+        if (weatherData && weatherData.code === 200 && weatherData.data) {
+          setWeather({
+            temp: weatherData.data.temp || 0,
+            dressing: weatherData.data.dressing || '',
+            dressing_detail: weatherData.data.dressing_detail || ''
+          });
+          console.log('📊 Updated weather data:', weatherData.data);
+        }
+        setWeatherLoading(false);
         
         // 提取节点数量
         let nodeCount = 0;
@@ -184,6 +217,33 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* 欢迎信息和天气显示 */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-slate-800">早安，管理员，请开始一天的工作吧</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              今日温度 {weatherLoading ? '...' : `${weather.temp}°C`}，{weatherLoading ? '正在获取天气信息...' : weather.dressing}。
+              {!weatherLoading && weather.dressing_detail}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 bg-slate-50 px-4 py-3 rounded-lg">
+            <div className="text-3xl text-blue-600">
+              <i className="fas fa-sun"></i>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-slate-800">
+                {weatherLoading ? '...' : `${weather.temp}°C`}
+              </div>
+              <div className="text-sm text-slate-500">
+                {weatherLoading ? 'Loading...' : weather.dressing}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* 统计卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat, idx) => (
           <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
