@@ -458,6 +458,40 @@ const Workloads: React.FC = () => {
       startSSELogs(selectedPod, selectedNamespace, tailLines);
     }
   };
+  
+  // 下载日志功能
+  const downloadLogs = () => {
+    if (!logsContent || !selectedPod) return;
+    
+    try {
+      // 创建Blob对象，使用UTF-8编码
+      const blob = new Blob([logsContent], { type: 'text/plain;charset=utf-8' });
+      
+      // 创建下载链接
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      
+      // 设置下载属性
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `${selectedPod}-logs-${timestamp}-${tailLines}lines.txt`;
+      a.href = url;
+      a.download = filename;
+      
+      // 触发下载
+      document.body.appendChild(a);
+      a.click();
+      
+      // 清理资源
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      // 显示下载成功通知
+      showNotification(`日志已成功下载: ${filename}`, 'success');
+    } catch (err) {
+      console.error('❌ Failed to download logs:', err);
+      showNotification(`下载日志失败: ${err.message}`, 'error');
+    }
+  };
 
   const resources = data ? data[activeTab] : [];
 
@@ -785,6 +819,15 @@ const Workloads: React.FC = () => {
                 <i className="fas fa-sync-alt mr-1"></i>
               )}
               Refresh
+            </button>
+            
+            <button 
+              className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={downloadLogs}
+              disabled={!logsContent || logsLoading}
+            >
+              <i className="fas fa-download mr-1"></i>
+              Download Logs
             </button>
           </div>
           
