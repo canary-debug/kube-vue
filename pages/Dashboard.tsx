@@ -41,7 +41,7 @@ const Dashboard: React.FC = () => {
         
         // 直接调用fetch，不使用request工具，以排除工具函数的问题
         const token = localStorage.getItem('k8s_token');
-        const healthUrl = 'http://localhost:9000/api/k8s/get/cluster_healthz';
+        const healthUrl = `${import.meta.env.VITE_BACKEND_URL}/api/k8s/get/cluster_healthz`;
         console.log('📞 Direct API call to:', healthUrl);
         console.log('🔑 Token available:', !!token);
         
@@ -77,14 +77,14 @@ const Dashboard: React.FC = () => {
         const [nodeData, podData, etcdResponse, weatherResponse] = await Promise.all([
           request<{ node_len: number }>('/k8s/get/nodes/len'),
           request<{ pod_count: number }>('/k8s/get/pods/len'),
-          fetch('http://localhost:9000/api/k8s/etcd/status', {
+          fetch(`${import.meta.env.VITE_BACKEND_URL}/api/k8s/etcd/status`, {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             }
           }),
-          fetch('http://localhost:9000/api/k8s/weather', {
+          fetch(`${import.meta.env.VITE_BACKEND_URL}/api/k8s/weather`, {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${token}`,

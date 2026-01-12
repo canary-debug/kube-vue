@@ -109,7 +109,7 @@ const Workloads: React.FC = () => {
       const apiUrl = `/k8s/get/deployment/${encodeURIComponent(ns)}`;
       console.log('🔗 API URL being called:', apiUrl);
       console.log('🌐 Full API path (with base):', '/api' + apiUrl);
-      console.log('🎯 Target backend:', 'http://localhost:9000/api' + apiUrl);
+      console.log('🎯 Target backend:', `${import.meta.env.VITE_BACKEND_URL}/api` + apiUrl);
       
       const response = await request<DeploymentResponse>(apiUrl);
       console.log('📦 Raw API response for namespace', ns, ':', response);
