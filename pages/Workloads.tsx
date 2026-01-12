@@ -36,6 +36,7 @@ const Workloads: React.FC = () => {
   const [showLogsPanel, setShowLogsPanel] = useState(false); // 是否显示日志面板
   const [tailLines, setTailLines] = useState<number>(100); // 日志行数，默认100
   const [followLogs, setFollowLogs] = useState<boolean>(false); // 是否实时跟踪日志
+  const [downloading, setDownloading] = useState<boolean>(false); // 下载中状态
   
   // 使用ref来存储abortController，确保能立即访问到最新实例
   const abortControllerRef = React.useRef<AbortController | null>(null);
@@ -464,32 +465,47 @@ const Workloads: React.FC = () => {
     if (!logsContent || !selectedPod) return;
     
     try {
+      setDownloading(true);
+      
       // 创建Blob对象，使用UTF-8编码
       const blob = new Blob([logsContent], { type: 'text/plain;charset=utf-8' });
+      
+      // 设置文件名
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `${selectedPod}-logs-${timestamp}-${tailLines}lines.txt`;
       
       // 创建下载链接
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       
       // 设置下载属性
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `${selectedPod}-logs-${timestamp}-${tailLines}lines.txt`;
       a.href = url;
       a.download = filename;
       
       // 触发下载
       document.body.appendChild(a);
-      a.click();
       
-      // 清理资源
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      // 显示下载成功通知
-      showNotification(`日志已成功下载: ${filename}`, 'success');
+      // 使用requestAnimationFrame确保浏览器有足够时间处理
+      requestAnimationFrame(() => {
+        a.click();
+        
+        // 清理DOM元素
+        document.body.removeChild(a);
+        
+        // 清理URL对象
+        URL.revokeObjectURL(url);
+        
+        // 直接设置下载完成，因为我们无法真正监听浏览器的下载完成事件
+        // 这里的实现是：文件已经成功生成并触发了下载，浏览器会处理后续的下载过程
+        setDownloading(false);
+        
+        // 显示下载触发成功通知，而不是下载完成通知
+        showNotification(`日志下载已触发: ${filename}`, 'success');
+      });
     } catch (err) {
       console.error('❌ Failed to download logs:', err);
       showNotification(`下载日志失败: ${err.message}`, 'error');
+      setDownloading(false);
     }
   };
 
@@ -824,10 +840,14 @@ const Workloads: React.FC = () => {
             <button 
               className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={downloadLogs}
-              disabled={!logsContent || logsLoading}
+              disabled={!logsContent || logsLoading || downloading}
             >
-              <i className="fas fa-download mr-1"></i>
-              Download Logs
+              {downloading ? (
+                <i className="fas fa-spinner fa-spin mr-1"></i>
+              ) : (
+                <i className="fas fa-download mr-1"></i>
+              )}
+              {downloading ? 'Downloading...' : 'Download Logs'}
             </button>
           </div>
           
