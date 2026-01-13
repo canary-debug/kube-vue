@@ -32,12 +32,11 @@ cd /path/to/kube-vue
 使用以下命令构建 Docker 镜像：
 
 ```bash
-docker build -t kube-vue:latest -f example/Dockerfile .
+cp example/Dockerfile ./
+docker build -t kube-vue:v1.0 .
 ```
 
 参数说明：
-- `-t kube-vue:latest`：指定镜像名称和标签
-- `-f example/Dockerfile`：指定 Dockerfile 路径
 - `.`：指定构建上下文为当前目录
 
 ### 1.3 验证镜像构建成功
@@ -49,7 +48,7 @@ docker images | grep kube-vue
 您应该能看到类似以下输出：
 
 ```
-kube-vue           latest    a1b2c3d4e5f6   2 minutes ago   123MB
+kube-vue           v1.0    a1b2c3d4e5f6   2 minutes ago   123MB
 ```
 
 ### 1.4 （可选）推送镜像到容器仓库
@@ -61,10 +60,10 @@ kube-vue           latest    a1b2c3d4e5f6   2 minutes ago   123MB
 docker login
 
 # 标记镜像
-docker tag kube-vue:latest <your-registry>/kube-vue:latest
+docker tag kube-vue:v1.0 <your-registry>/kube-vue:v1.0
 
 # 推送镜像
-docker push <your-registry>/kube-vue:latest
+docker push <your-registry>/kube-vue:v1.0
 ```
 
 ## 步骤 2：配置 Kubernetes 部署文件
@@ -73,25 +72,19 @@ docker push <your-registry>/kube-vue:latest
 
 根据您的实际环境修改 `kube-deployment.yaml` 文件：
 
-1. **修改 ConfigMap 中的后端地址**：
-   ```yaml
-   data:
-     VITE_BACKEND_URL: http://your-backend-service:9000  # 修改为实际后端地址
-   ```
-
-2. **如果使用远程镜像仓库**，修改镜像名称：
+1. **如果使用远程镜像仓库**，修改镜像名称：
    ```yaml
    image: <your-registry>/kube-vue:latest  # 修改为远程仓库地址
    ```
 
-3. **（可选）调整副本数量**：
+2. **（可选）调整副本数量**：
    ```yaml
    replicas: 2  # 根据实际需求调整
    ```
 
-4. **（可选）修改 NodePort 端口**：
+3. **（可选）修改 NodePort 端口**：
    ```yaml
-   nodePort: 30080  # 在 30000-32767 范围内选择
+   nodePort: 30081  # 在 30000-32767 范围内选择
    ```
 
 ## 步骤 3：部署到 Kubernetes 集群

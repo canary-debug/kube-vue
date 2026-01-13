@@ -1,32 +1,14 @@
-# Kubernetes 部署配置文件
-# 包含 Deployment、Service 和 ConfigMap
-
-# ConfigMap 用于存储环境变量配置
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: kube-vue-config
-  namespace: default
-  labels:
-    app: kube-vue
-    tier: frontend
-data:
-  # 后端服务地址，根据实际情况修改
-  VITE_BACKEND_URL: http://10.1.30.81:9000
-  # API 基础路径
-  VITE_API_BASE: /api
----
 # Deployment 配置
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kube-vue
-  namespace: default
+  namespace: kube-vue-admin
   labels:
     app: kube-vue
     tier: frontend
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: kube-vue
@@ -46,7 +28,7 @@ spec:
       - name: kube-vue
         # 镜像名称，根据实际构建情况修改
         # 例如：kube-vue:v1.0.0
-        image: kube-vue:latest
+        image: kube-vue:v1.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
@@ -78,7 +60,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: kube-vue-service
-  namespace: default
+  namespace: kube-vue-admin
   labels:
     app: kube-vue
     tier: frontend
@@ -88,7 +70,7 @@ spec:
   - port: 80
     targetPort: 80
     # NodePort 端口范围：30000-32767
-    nodePort: 30080
+    nodePort: 30081
   selector:
     app: kube-vue
     tier: frontend
