@@ -187,6 +187,18 @@ const Workloads: React.FC = () => {
       setShowPodDetails(false);
       setSelectedDeployment(null);
       setPodsData([]);
+      
+      // 关闭日志面板并清除日志相关状态
+      setShowLogsPanel(false);
+      setSelectedPod(null);
+      setLogsContent('');
+      setFollowLogs(false);
+      
+      // 关闭SSE连接
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     }
   }, [selectedNamespace]);
 
