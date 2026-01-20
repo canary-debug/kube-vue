@@ -75,7 +75,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             {navItems.find(i => i.path === location.pathname)?.label || 'Page'}
           </h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-500">v1.2.0</span>
+            <span className="text-sm text-slate-500">v1.0</span>
             <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
               A
             </div>
