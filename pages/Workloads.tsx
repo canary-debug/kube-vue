@@ -105,60 +105,82 @@ const Workloads: React.FC = () => {
         return;
       }
       
-      // Use the new API endpoint for deployments
-      const apiUrl = `/k8s/get/deployment/${encodeURIComponent(ns)}`;
-      console.log('🔗 API URL being called:', apiUrl);
-      console.log('🌐 Full API path (with base):', '/api' + apiUrl);
-      console.log('🎯 Target backend:', `${import.meta.env.VITE_BACKEND_URL}/api` + apiUrl);
+      let apiUrl = '';
+      let response: any = null;
       
-      const response = await request<DeploymentResponse>(apiUrl);
-      console.log('📦 Raw API response for namespace', ns, ':', response);
-      
-      // Log response details
-      if (response && response.Status) {
-        console.log('📊 Response contains', response.Status.length, 'deployments');
-        console.log('📋 Deployment names:', response.Status.map(d => d.name));
+      // 根据当前选中的标签页获取不同类型的资源数据
+      switch (activeTab) {
+        case 'deployments':
+          apiUrl = `/k8s/get/deployment/${encodeURIComponent(ns)}`;
+          break;
+        case 'statefulsets':
+          apiUrl = `/k8s/get/statefulset/${encodeURIComponent(ns)}`;
+          break;
+        case 'daemonsets':
+          apiUrl = `/k8s/get/daemonset/${encodeURIComponent(ns)}`;
+          break;
+        default:
+          apiUrl = `/k8s/get/deployment/${encodeURIComponent(ns)}`;
       }
       
-      // Transform the response to match the expected format
+      console.log('🔗 API URL being called:', apiUrl);
+      console.log('🌐 Active tab:', activeTab);
+      
+      // 使用统一的request函数发送请求，已通过.env.local管理API地址
+      response = await request<any>(apiUrl);
+      console.log('📦 Raw API response for namespace', ns, ':', response);
+      
+      // 初始化数据对象
+      const newData = {
+        namespace: ns,
+        deployments: [] as ControllerResource[],
+        statefulsets: [] as ControllerResource[],
+        daemonsets: [] as ControllerResource[]
+      };
+      
+      // 根据当前标签页和响应数据更新相应的资源列表
       if (response && response.Status) {
-        // Extract ready count from status string (e.g., "运行中 (1/1)" → ready: 1)
-        const deployments = response.Status.map(deployment => {
-          const readyMatch = deployment.status.match(/\((\d+)\/(\d+)\)/);
+        console.log('📊 Response contains', response.Status.length, `${activeTab}`);
+        
+        // 转换响应数据为统一格式
+        const resources = response.Status.map((item: any) => {
+          const readyMatch = item.status.match(/\((\d+)\/(\d+)\)/);
           const ready = readyMatch ? parseInt(readyMatch[1], 10) : 0;
           
           return {
-            name: deployment.name,
-            replicas: deployment.replicas,
-            images: [], // New API doesn't provide images, set empty array
+            name: item.name,
+            replicas: item.replicas,
+            images: [], // API doesn't provide images, set empty array
             ready: ready,
             updated: ready, // Assume all ready replicas are updated
             available: ready, // Assume all ready replicas are available
-            created_at: deployment.update_time, // Use update_time as created_at
-            update_at: deployment.update_time,
-            port: 0 // New API doesn't provide port, set default to 0
+            created_at: item.update_time, // Use update_time as created_at
+            update_at: item.update_time,
+            port: 0 // API doesn't provide port, set default to 0
           };
         });
         
-        console.log('✅ Setting data for namespace', ns, 'with', deployments.length, 'deployments');
-        setData({
-          namespace: ns,
-          deployments: deployments,
-          statefulsets: [], // New API doesn't provide statefulsets
-          daemonsets: [] // New API doesn't provide daemonsets
-        });
+        // 根据当前标签页设置对应资源列表
+        switch (activeTab) {
+          case 'deployments':
+            newData.deployments = resources;
+            break;
+          case 'statefulsets':
+            newData.statefulsets = resources;
+            break;
+          case 'daemonsets':
+            newData.daemonsets = resources;
+            break;
+        }
+        
+        console.log('✅ Setting data for namespace', ns, 'with', resources.length, `${activeTab}`);
       } else {
         console.error('❌ Invalid response format for controllers');
         console.error('   - Response keys:', Object.keys(response || {}));
         console.error('   - Has Status property:', response && 'Status' in response);
-        // Set empty data on invalid response
-        setData({
-          namespace: ns,
-          deployments: [],
-          statefulsets: [],
-          daemonsets: []
-        });
       }
+      
+      setData(newData);
     } catch (err) {
       console.error('❌ Failed to fetch workload data for namespace', ns, ':', err);
       // Set empty data on error
@@ -200,7 +222,7 @@ const Workloads: React.FC = () => {
         abortControllerRef.current = null;
       }
     }
-  }, [selectedNamespace]);
+  }, [selectedNamespace, activeTab]);
 
   // 显示通知的函数
   const showNotification = (message: string, type: 'success' | 'error') => {
