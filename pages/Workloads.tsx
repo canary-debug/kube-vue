@@ -238,14 +238,30 @@ const Workloads: React.FC = () => {
     }, 3000);
   };
   
-  // 获取Deployment的Pod信息
-  const fetchDeploymentPods = async (name: string) => {
+  // 获取控制器资源的Pod信息（支持Deployment、StatefulSet、DaemonSet）
+  const fetchControllerPods = async (name: string) => {
     try {
       setPodsLoading(true);
-      console.log(`🔍 Fetching Pods for Deployment: ${name} in namespace: ${selectedNamespace}`);
+      console.log(`🔍 Fetching Pods for ${activeTab}: ${name} in namespace: ${selectedNamespace}`);
       
-      // 发送POST请求到获取Pod信息接口
-      const response = await request<DeploymentPodsResponse>('/k8s/deployment/pods', {
+      // 根据当前标签页选择API端点
+      let apiUrl = '';
+      switch (activeTab) {
+        case 'deployments':
+          apiUrl = '/k8s/deployment/pods';
+          break;
+        case 'statefulsets':
+          apiUrl = '/k8s/statefulset/pods';
+          break;
+        case 'daemonsets':
+          apiUrl = '/k8s/daemonset/pods';
+          break;
+        default:
+          apiUrl = '/k8s/deployment/pods';
+      }
+      
+      // 发送POST请求到获取Pod信息接口，格式：{ "name": "calico-node", "namespace": "kube-system" }
+      const response = await request<DeploymentPodsResponse>(apiUrl, {
         method: 'POST',
         body: JSON.stringify({
           name: name,
@@ -271,8 +287,8 @@ const Workloads: React.FC = () => {
       }
       setFollowLogs(false);
     } catch (err) {
-      console.error('❌ Failed to fetch Deployment Pods:', err);
-      showNotification(`获取 Deployment ${name} 的 Pod 信息失败: ${err.message}`, 'error');
+      console.error(`❌ Failed to fetch ${activeTab} Pods:`, err);
+      showNotification(`获取 ${activeTab} ${name} 的 Pod 信息失败: ${err.message}`, 'error');
     } finally {
       setPodsLoading(false);
     }
@@ -628,7 +644,7 @@ const Workloads: React.FC = () => {
                     <td className="px-6 py-4 font-medium">
                       <button 
                         className="text-blue-600 hover:underline cursor-pointer"
-                        onClick={() => fetchDeploymentPods(item.name)}
+                        onClick={() => fetchControllerPods(item.name)}
                       >
                         {item.name}
                       </button>
