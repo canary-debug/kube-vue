@@ -38,6 +38,11 @@ const Workloads: React.FC = () => {
   const [followLogs, setFollowLogs] = useState<boolean>(false); // 是否实时跟踪日志
   const [downloading, setDownloading] = useState<boolean>(false); // 下载中状态
   
+  // 删除确认模态框状态管理
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false); // 是否显示删除确认模态框
+  const [podToDelete, setPodToDelete] = useState<{name: string, namespace: string} | null>(null); // 要删除的Pod信息
+  const [confirmPodName, setConfirmPodName] = useState<string>(''); // 用户输入的确认Pod名称
+  
   // 使用ref来存储abortController，确保能立即访问到最新实例
   const abortControllerRef = React.useRef<AbortController | null>(null);
 
@@ -381,9 +386,8 @@ const Workloads: React.FC = () => {
       abortControllerRef.current = controller;
       
       const token = localStorage.getItem('k8s_token');
-      // 使用相对URL，并添加API_BASE前缀，与request函数保持一致
-      const API_BASE = '/api';
-      const apiUrl = `${API_BASE}/k8s/pod/logs/${encodeURIComponent(namespace)}/${encodeURIComponent(podName)}?tail=${tail}&follow=true`;
+      // 使用相对URL，与request函数保持一致（不需要/api前缀，直接使用完整路径）
+      const apiUrl = `/api/k8s/pod/logs/${encodeURIComponent(namespace)}/${encodeURIComponent(podName)}?tail=${tail}&follow=true`;
       
       console.log('🔗 Starting SSE logs from:', apiUrl);
       
@@ -556,6 +560,31 @@ const Workloads: React.FC = () => {
       console.error('❌ Failed to download logs:', err);
       showNotification(`下载日志失败: ${err.message}`, 'error');
       setDownloading(false);
+    }
+  };
+
+  // 删除Pod的函数
+  const handleDeletePod = async (podName: string, namespace: string) => {
+    try {
+      console.log(`🗑️ Deleting Pod: ${podName} in namespace: ${namespace}`);
+      
+      // 发送DELETE请求到删除Pod接口（不需要/api前缀，client.ts会自动添加）
+      const apiUrl = `/k8s/delete/pod/${encodeURIComponent(namespace)}/${encodeURIComponent(podName)}`;
+      await request<any>(apiUrl, {
+        method: 'DELETE'
+      });
+      
+      console.log('✅ Pod deleted successfully');
+      
+      // 删除成功后刷新Pod列表
+      await fetchControllerPods(selectedDeployment!);
+      
+      // 显示成功通知
+      showNotification(`Pod ${podName} 已成功删除`, 'success');
+    } catch (err) {
+      console.error('❌ Failed to delete Pod:', err);
+      // 显示错误通知
+      showNotification(`删除 Pod ${podName} 失败: ${err.message}`, 'error');
     }
   };
 
@@ -767,7 +796,7 @@ const Workloads: React.FC = () => {
                       <td className="px-6 py-4 text-xs text-slate-500">
                         {new Date(pod.created_at).toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right space-x-2">
                         <button 
               className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded transition-colors text-sm"
               onClick={() => {
@@ -792,6 +821,16 @@ const Workloads: React.FC = () => {
               }}
             >
               <i className="fas fa-file-alt mr-1"></i> Logs
+            </button>
+            <button 
+              className="text-red-600 hover:bg-red-50 px-3 py-1 rounded transition-colors text-sm"
+              onClick={() => {
+                // 显示删除确认模态框
+                setPodToDelete({ name: pod.name, namespace: selectedNamespace });
+                setShowDeleteModal(true);
+              }}
+            >
+              <i className="fas fa-trash mr-1"></i> Delete
             </button>
                       </td>
                     </tr>
@@ -911,6 +950,73 @@ const Workloads: React.FC = () => {
             ) : (
               <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono">{logsContent || 'No logs available'}</pre>
             )}
+          </div>
+        </div>
+      )}
+      
+      {/* 删除确认模态框 */}
+      {showDeleteModal && podToDelete && (
+        <div className="fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+            <div className="flex justify-between items-center p-6 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <i className="fas fa-trash text-red-500 text-xl"></i>
+                <h2 className="text-xl font-semibold text-slate-800">删除容器组</h2>
+              </div>
+              <button 
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setConfirmPodName('');
+                }}
+              >
+                <i className="fas fa-times text-lg"></i>
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4">
+                请输入容器组名称 <span className="font-medium">{podToDelete.name}</span> 以确认您了解此操作的风险。
+              </p>
+              
+              <div className="mb-6">
+                <input 
+                  type="text"
+                  placeholder="请输入容器组名称确认删除"
+                  value={confirmPodName}
+                  onChange={(e) => setConfirmPodName(e.target.value)}
+                  className={`w-full px-4 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors
+                    ${confirmPodName === podToDelete.name ? 'border-green-500' : 'border-slate-200'}
+                  `}
+                  autoFocus
+                />
+              </div>
+              
+              <div className="flex justify-end gap-3">
+                <button 
+                  className="px-4 py-2 border border-slate-200 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setConfirmPodName('');
+                  }}
+                >
+                  取消
+                </button>
+                <button 
+                  className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={async () => {
+                    if (confirmPodName === podToDelete.name) {
+                      await handleDeletePod(podToDelete.name, podToDelete.namespace);
+                      setShowDeleteModal(false);
+                      setConfirmPodName('');
+                    }
+                  }}
+                  disabled={confirmPodName !== podToDelete.name}
+                >
+                  确定
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
