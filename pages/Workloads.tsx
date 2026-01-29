@@ -673,8 +673,12 @@ const Workloads: React.FC = () => {
       setTerminalData('');
       setTerminalConnected(false);
       
+      // 从环境变量获取后端URL并转换为WebSocket URL
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:9000';
+      const wsBaseUrl = backendUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+      
       // 构建WebSocket URL
-      const wsUrl = `ws://localhost:9000/ws/terminal?namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(podName)}&container=${encodeURIComponent(containerName)}`;
+      const wsUrl = `${wsBaseUrl}/ws/terminal?namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(podName)}&container=${encodeURIComponent(containerName)}`;
       console.log(`🔗 Connecting to terminal: ${wsUrl}`);
       
       // 创建WebSocket连接
