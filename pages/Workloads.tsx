@@ -43,8 +43,21 @@ const Workloads: React.FC = () => {
   const [podToDelete, setPodToDelete] = useState<{name: string, namespace: string} | null>(null); // 要删除的Pod信息
   const [confirmPodName, setConfirmPodName] = useState<string>(''); // 用户输入的确认Pod名称
   
-  // 使用ref来存储abortController，确保能立即访问到最新实例
+  // 容器信息状态管理
+  const [showContainersPanel, setShowContainersPanel] = useState<boolean>(false); // 是否显示容器信息面板
+  const [selectedPodForContainers, setSelectedPodForContainers] = useState<string | null>(null); // 当前选中的Pod名称（用于容器信息）
+  const [containersData, setContainersData] = useState<any[]>([]); // 容器信息数据
+  const [containersLoading, setContainersLoading] = useState<boolean>(false); // 容器信息加载状态
+  
+  // 终端相关状态管理
+  const [showTerminalPanel, setShowTerminalPanel] = useState<boolean>(false); // 是否显示终端面板
+  const [selectedContainerForTerminal, setSelectedContainerForTerminal] = useState<{pod: string, container: string, namespace: string} | null>(null); // 当前选中的容器信息（用于终端）
+  const [terminalConnected, setTerminalConnected] = useState<boolean>(false); // 终端连接状态
+  const [terminalData, setTerminalData] = useState<string>(''); // 终端输出数据
+  
+  // 使用ref来存储abortController和WebSocket连接
   const abortControllerRef = React.useRef<AbortController | null>(null);
+  const wsRef = React.useRef<WebSocket | null>(null);
 
   const fetchNamespaces = async () => {
     setNamespaceLoading(true);
@@ -221,6 +234,11 @@ const Workloads: React.FC = () => {
       setLogsContent('');
       setFollowLogs(false);
       
+      // 关闭容器信息面板并清除相关状态
+      setShowContainersPanel(false);
+      setSelectedPodForContainers(null);
+      setContainersData([]);
+      
       // 关闭SSE连接
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -291,6 +309,11 @@ const Workloads: React.FC = () => {
         abortControllerRef.current = null;
       }
       setFollowLogs(false);
+      
+      // 关闭容器信息面板（如果打开的话）
+      setShowContainersPanel(false);
+      setSelectedPodForContainers(null);
+      setContainersData([]);
     } catch (err) {
       console.error(`❌ Failed to fetch ${activeTab} Pods:`, err);
       showNotification(`获取 ${activeTab} ${name} 的 Pod 信息失败: ${err.message}`, 'error');
@@ -588,6 +611,138 @@ const Workloads: React.FC = () => {
     }
   };
 
+  // 获取Pod容器信息的函数
+  const fetchPodContainers = async (podName: string, namespace: string) => {
+    try {
+      setContainersLoading(true);
+      console.log(`🔍 Fetching containers for Pod: ${podName} in namespace: ${namespace}`);
+      
+      // 发送GET请求到获取容器信息接口
+      const apiUrl = `/k8s/get/pod/containers/${encodeURIComponent(namespace)}/${encodeURIComponent(podName)}`;
+      const response = await request<any>(apiUrl, {
+        method: 'GET'
+      });
+      
+      console.log('✅ Containers fetched successfully:', response);
+      
+      // 更新容器数据
+      setContainersData(response.data || []);
+      setSelectedPodForContainers(podName);
+      setShowContainersPanel(true);
+      
+      // 关闭日志面板（如果打开的话）
+      setShowLogsPanel(false);
+      setSelectedPod(null);
+      setLogsContent('');
+      // 关闭SSE连接
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setFollowLogs(false);
+      
+      // 关闭终端面板（如果打开的话）
+      closeTerminalConnection();
+      setShowTerminalPanel(false);
+      setSelectedContainerForTerminal(null);
+      setTerminalData('');
+    } catch (err) {
+      console.error('❌ Failed to fetch Pod containers:', err);
+      showNotification(`获取 Pod ${podName} 的容器信息失败: ${err.message}`, 'error');
+    } finally {
+      setContainersLoading(false);
+    }
+  };
+
+  // 关闭终端WebSocket连接
+  const closeTerminalConnection = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+      setTerminalConnected(false);
+    }
+  };
+
+  // 建立终端WebSocket连接
+  const connectToTerminal = (podName: string, containerName: string, namespace: string) => {
+    try {
+      // 先关闭现有的连接
+      closeTerminalConnection();
+      
+      // 重置终端状态
+      setTerminalData('');
+      setTerminalConnected(false);
+      
+      // 构建WebSocket URL
+      const wsUrl = `ws://localhost:9000/ws/terminal?namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(podName)}&container=${encodeURIComponent(containerName)}`;
+      console.log(`🔗 Connecting to terminal: ${wsUrl}`);
+      
+      // 创建WebSocket连接
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      
+      // 连接打开事件
+      ws.onopen = () => {
+        console.log('✅ Terminal WebSocket connected');
+        setTerminalConnected(true);
+      };
+      
+      // 接收消息事件
+      ws.onmessage = (event) => {
+        setTerminalData(prev => prev + event.data);
+        // 滚动到终端底部
+        setTimeout(() => {
+          const terminalElement = document.getElementById('terminal-content');
+          if (terminalElement) {
+            terminalElement.scrollTop = terminalElement.scrollHeight;
+          }
+        }, 0);
+      };
+      
+      // 连接关闭事件
+      ws.onclose = () => {
+        console.log('❌ Terminal WebSocket disconnected');
+        setTerminalConnected(false);
+        wsRef.current = null;
+      };
+      
+      // 连接错误事件
+      ws.onerror = (error) => {
+        console.error('❌ Terminal WebSocket error:', error);
+        setTerminalConnected(false);
+        wsRef.current = null;
+        showNotification(`终端连接失败: ${error.message}`, 'error');
+      };
+      
+    } catch (err) {
+      console.error('❌ Failed to connect to terminal:', err);
+      showNotification(`终端连接失败: ${err.message}`, 'error');
+    }
+  };
+
+  // 发送终端输入
+  const sendTerminalInput = (input: string) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      const message = JSON.stringify({
+        operation: 'stdin',
+        data: input
+      });
+      wsRef.current.send(message);
+    }
+  };
+
+  // 调整终端窗口大小
+  const resizeTerminal = (rows: number, cols: number) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      const message = JSON.stringify({
+        operation: 'resize',
+        rows: rows,
+        cols: cols
+      });
+      wsRef.current.send(message);
+    }
+  };
+
   const resources = data ? data[activeTab] : [];
 
   return (
@@ -823,6 +978,20 @@ const Workloads: React.FC = () => {
               <i className="fas fa-file-alt mr-1"></i> Logs
             </button>
             <button 
+              className="text-purple-600 hover:bg-purple-50 px-3 py-1 rounded transition-colors text-sm"
+              onClick={() => {
+                // 点击新Pod时，先关闭当前容器面板，再重新初始化
+                setShowContainersPanel(false);
+                // 使用setTimeout确保状态更新后再执行后续操作
+                setTimeout(() => {
+                  // 获取容器信息
+                  fetchPodContainers(pod.name, selectedNamespace);
+                }, 0);
+              }}
+            >
+              <i className="fas fa-box mr-1"></i> Containers
+            </button>
+            <button 
               className="text-red-600 hover:bg-red-50 px-3 py-1 rounded transition-colors text-sm"
               onClick={() => {
                 // 显示删除确认模态框
@@ -950,6 +1119,163 @@ const Workloads: React.FC = () => {
             ) : (
               <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono">{logsContent || 'No logs available'}</pre>
             )}
+          </div>
+        </div>
+      )}
+      
+      {/* 容器信息面板 */}
+      {showContainersPanel && selectedPodForContainers && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex justify-between items-center p-6 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">
+                {selectedPodForContainers} - Containers
+              </h2>
+              <p className="text-sm text-slate-500">Namespace: {selectedNamespace}</p>
+            </div>
+            <button 
+              className="text-slate-400 hover:text-slate-600" 
+              onClick={() => {
+                // 关闭容器面板并重置状态
+                setShowContainersPanel(false);
+                setSelectedPodForContainers(null);
+                setContainersData([]);
+              }}
+            >
+              <i className="fas fa-times text-lg"></i>
+            </button>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                  <th className="px-6 py-4 font-semibold">Container Name</th>
+                  <th className="px-6 py-4 font-semibold">Restarts</th>
+                  <th className="px-6 py-4 font-semibold">State</th>
+                  <th className="px-6 py-4 font-semibold">Ports</th>
+                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {containersLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                      <i className="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                      <p>Loading containers...</p>
+                    </td>
+                  </tr>
+                ) : containersData.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400">No containers found for this pod</td>
+                  </tr>
+                ) : (
+                  containersData.map((container, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-slate-800">{container.name}</td>
+                      <td className="px-6 py-4 text-slate-600">{container.restart_count}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${container.state === 'Running' ? 'bg-green-100 text-green-800' : container.state === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+                          {container.state}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {container.ports && container.ports.length > 0 ? (
+                          container.ports.map((port, i) => (
+                            <span key={i} className="inline-block bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 text-xs mr-1 mb-1">
+                              {port}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button 
+                          className="text-green-600 hover:bg-green-50 px-3 py-1 rounded transition-colors text-sm"
+                          onClick={() => {
+                            // 显示终端面板
+                            setSelectedContainerForTerminal({
+                              pod: selectedPodForContainers!,
+                              container: container.name,
+                              namespace: selectedNamespace
+                            });
+                            setShowTerminalPanel(true);
+                            // 连接到终端
+                            connectToTerminal(selectedPodForContainers!, container.name, selectedNamespace);
+                          }}
+                          disabled={container.state !== 'Running'}
+                        >
+                          <i className="fas fa-terminal mr-1"></i> Terminal
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      
+      {/* 终端面板 */}
+      {showTerminalPanel && selectedContainerForTerminal && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex justify-between items-center p-6 border-b border-slate-100">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">
+                {selectedContainerForTerminal.pod} - Terminal ({selectedContainerForTerminal.container})
+              </h2>
+              <p className="text-sm text-slate-500">Namespace: {selectedContainerForTerminal.namespace}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full ${terminalConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                <span className="text-xs text-slate-500">
+                  {terminalConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
+              <button 
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+                onClick={() => {
+                  // 关闭终端面板并重置状态
+                  closeTerminalConnection();
+                  setShowTerminalPanel(false);
+                  setSelectedContainerForTerminal(null);
+                  setTerminalData('');
+                }}
+              >
+                <i className="fas fa-times text-lg"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-6 bg-slate-900 rounded-b-xl">
+            {/* 终端内容 */}
+            <div 
+              id="terminal-content"
+              className="text-sm text-green-400 font-mono whitespace-pre-wrap overflow-auto max-h-96 mb-4"
+              style={{ minHeight: '200px' }}
+            >
+              {terminalData || 'Connecting to terminal...'}
+            </div>
+            
+            {/* 终端输入 */}
+            <div className="flex items-center gap-2">
+              <span className="text-green-400 font-mono">$</span>
+              <input 
+                type="text"
+                className="flex-1 bg-transparent border-none outline-none text-green-400 font-mono placeholder-green-600"
+                placeholder="Type command..."
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    sendTerminalInput(e.target.value + '\n');
+                    e.target.value = '';
+                  }
+                }}
+                disabled={!terminalConnected}
+              />
+            </div>
           </div>
         </div>
       )}
