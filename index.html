@@ -16,5 +16,41 @@
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    
+    <!-- Dify Chatbot Embed -->
+    <script>
+      window.difyChatbotConfig = {
+       token: '1pL5N5gdzGgpx6C0',
+       baseUrl: 'http://192.168.93.101',
+       inputs: {
+         // You can define the inputs from the Start node here
+         // key is the variable name
+         // e.g.
+         // name: "NAME"
+       },
+       systemVariables: {
+         // user_id: 'YOU CAN DEFINE USER ID HERE',
+         // conversation_id: 'YOU CAN DEFINE CONVERSATION ID HERE, IT MUST BE A VALID UUID',
+       },
+       userVariables: {
+         // avatar_url: 'YOU CAN DEFINE USER AVATAR URL HERE',
+         // name: 'YOU CAN DEFINE USER NAME HERE',
+       },
+      }
+    </script>
+    <script
+      src="http://192.168.93.101/embed.min.js"
+      id="1pL5N5gdzGgpx6C0"
+      defer>
+    </script>
+    <style>
+      #dify-chatbot-bubble-button {
+        background-color: #1C64F2 !important;
+      }
+      #dify-chatbot-bubble-window {
+        width: 24rem !important;
+        height: 40rem !important;
+      }
+    </style>
 </body>
 </html>
