@@ -1,5 +1,10 @@
 <template>
   <div class="dashboard">
+    <div class="greeting-section">
+      <h2 class="greeting">{{ greeting }}, {{ username }}!</h2>
+      <p class="greeting-time">{{ currentTime }}</p>
+    </div>
+
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-icon nodes">
@@ -128,11 +133,46 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, onUnmounted } from 'vue'
 import { useK8sStore } from '../stores/k8s'
+import { useAuthStore } from '../stores/auth'
 import { HardDrive, FolderTree, Box, Layers, Activity } from 'lucide-vue-next'
 
 const k8sStore = useK8sStore()
+const authStore = useAuthStore()
+
+const currentTime = ref('')
+let timeInterval: number | null = null
+
+const username = computed(() => {
+  return authStore.user?.username || 'Admin'
+})
+
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 12) {
+    return '早上好'
+  } else if (hour >= 12 && hour < 18) {
+    return '下午好'
+  } else if (hour >= 18 && hour < 22) {
+    return '晚上好'
+  } else {
+    return '夜深了'
+  }
+})
+
+const updateTime = () => {
+  const now = new Date()
+  const options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+    hour: '2-digit',
+    minute: '2-digit'
+  }
+  currentTime.value = now.toLocaleDateString('zh-CN', options)
+}
 
 const nodeCount = computed(() => k8sStore.nodeCount || k8sStore.nodes.length)
 const namespaceCount = computed(() => k8sStore.namespaces.length)
@@ -158,6 +198,9 @@ const recentNodes = computed(() => {
 })
 
 onMounted(async () => {
+  updateTime()
+  timeInterval = window.setInterval(updateTime, 60000)
+
   await Promise.all([
     k8sStore.fetchNodes(),
     k8sStore.fetchNodeCount(),
@@ -165,11 +208,37 @@ onMounted(async () => {
     k8sStore.fetchClusterHealth(),
   ])
 })
+
+onUnmounted(() => {
+  if (timeInterval) {
+    clearInterval(timeInterval)
+  }
+})
 </script>
 
 <style scoped>
 .dashboard {
   max-width: 1400px;
+}
+
+.greeting-section {
+  margin-bottom: 32px;
+  padding: 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+}
+
+.greeting {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.greeting-time {
+  font-size: 14px;
+  opacity: 0.9;
+  margin: 0;
 }
 
 .stats-grid {
