@@ -2,73 +2,53 @@
   <div class="namespaces-page">
     <div class="page-header">
       <h2>Namespaces</h2>
-      <button class="refresh-btn" @click="refreshNamespaces" :disabled="loading">
-        <RefreshCw :size="18" :class="{ spinning: loading }" />
+      <button class="refresh-btn" @click="refreshNamespaces" :disabled="k8sStore.loading">
+        <RefreshCw :size="18" :class="{ spinning: k8sStore.loading }" />
         Refresh
       </button>
     </div>
 
-    <div v-if="error" class="error-message">
-      {{ error }}
+    <div v-if="k8sStore.error" class="error-message">
+      {{ k8sStore.error }}
     </div>
 
-    <div v-if="loading && namespaces.length === 0" class="loading-message">
+    <div v-if="k8sStore.loading && namespaces.length === 0" class="loading-message">
       Loading namespaces...
     </div>
 
     <div v-else class="namespaces-grid">
       <div
-        v-for="(ns, index) in namespaces"
+        v-for="ns in namespaces"
         :key="ns"
         class="namespace-card"
         @click="selectNamespace(ns)"
       >
-        <div class="namespace-header">
-          <div class="namespace-icon">
-            <FolderTree :size="24" />
-          </div>
-          <div class="namespace-info">
-            <h3>{{ ns }}</h3>
-            <span class="namespace-index">#{{ index + 1 }}</span>
-          </div>
+        <div class="namespace-icon">
+          <FolderTree :size="32" />
         </div>
-        <div class="namespace-actions">
-          <router-link :to="`/deployments/${ns}`" class="action-btn">
-            <Box :size="16" />
-            Deployments
-          </router-link>
-          <router-link :to="`/pods/${ns}`" class="action-btn">
-            <Layers :size="16" />
-            Pods
-          </router-link>
-        </div>
+        <div class="namespace-name">{{ ns }}</div>
+        <div class="namespace-badge">Active</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useK8sStore } from '../stores/k8s'
-import { FolderTree, Box, Layers, RefreshCw } from 'lucide-vue-next'
+import { FolderTree, RefreshCw } from 'lucide-vue-next'
 
 const router = useRouter()
 const k8sStore = useK8sStore()
-const loading = ref(false)
-const error = ref('')
 
 const namespaces = computed(() => k8sStore.namespaces)
 
 async function refreshNamespaces() {
-  loading.value = true
-  error.value = ''
   try {
     await k8sStore.fetchNamespaces()
-  } catch (err: any) {
-    error.value = err.message || 'Failed to load namespaces'
-  } finally {
-    loading.value = false
+  } catch (err) {
+    console.error('Failed to fetch namespaces:', err)
   }
 }
 
@@ -151,87 +131,73 @@ onMounted(async () => {
 
 .namespaces-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 20px;
 }
 
 .namespace-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 20px;
   background: white;
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 24px;
   cursor: pointer;
   transition: all 0.2s;
+  min-height: 180px;
 }
 
 .namespace-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-4px);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
-.namespace-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+.namespace-card:hover .namespace-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.namespace-card:hover .namespace-name {
+  color: white;
+}
+
+.namespace-card:hover .namespace-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
 .namespace-icon {
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  border-radius: 16px;
   color: white;
-}
-
-.namespace-info {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.namespace-info h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
-}
-
-.namespace-index {
-  font-size: 12px;
-  padding: 4px 12px;
-  background: #f3f4f6;
-  color: #6b7280;
-  border-radius: 12px;
-}
-
-.namespace-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.action-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px;
-  background: #f9fafb;
-  border-radius: 8px;
-  color: #4b5563;
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 500;
   transition: all 0.2s;
 }
 
-.action-btn:hover {
-  background: #eef2ff;
-  color: #4f46e5;
+.namespace-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  text-align: center;
+  word-break: break-word;
+  transition: color 0.2s;
+}
+
+.namespace-badge {
+  padding: 4px 12px;
+  background: #ecfdf5;
+  color: #059669;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
 }
 </style>
