@@ -20,13 +20,12 @@ const router = useRouter()
 const authStore = useAuthStore()
 const loginRef = ref<InstanceType<typeof LoginPage>>()
 
-async function handleLogin(payload: { email: string; password: string; remember: boolean }) {
+async function handleLogin(payload: { username: string; password: string; remember: boolean }) {
   loginRef.value?.setLoading(true)
   loginRef.value?.setError('')
 
-  const username = payload.email.split('@')[0]
   const success = await authStore.login({
-    username,
+    username: payload.username,
     password: payload.password,
   })
 

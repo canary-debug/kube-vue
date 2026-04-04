@@ -33,9 +33,9 @@
         </div>
         <form @submit.prevent="onSubmit" class="form">
           <div class="field">
-            <label for="login-email">Email</label>
-            <input id="login-email" type="email" :placeholder="emailPlaceholder" v-model="email"
-              autocomplete="off" @focus="isTyping = true" @blur="isTyping = false" required />
+            <label for="login-username">Username</label>
+            <input id="login-username" type="text" :placeholder="usernamePlaceholder" v-model="username"
+              autocomplete="username" @focus="isTyping = true" @blur="isTyping = false" required />
           </div>
           <div class="field">
             <label for="login-password">Password</label>
@@ -76,24 +76,24 @@ const props = withDefaults(defineProps<{
   brandName?: string
   title?: string
   subtitle?: string
-  emailPlaceholder?: string
+  usernamePlaceholder?: string
   primaryColor?: string
   showGoogleLogin?: boolean
 }>(), {
   brandName: 'YourBrand',
   title: 'Welcome back!',
   subtitle: 'Please enter your details',
-  emailPlaceholder: 'example@mail.com/name',
+  usernamePlaceholder: 'Username',
   primaryColor: '#4f46e5',
   showGoogleLogin: true,
 })
 
 const emit = defineEmits<{
-  submit: [payload: { email: string; password: string; remember: boolean }]
+  submit: [payload: { username: string; password: string; remember: boolean }]
 }>()
 
 const showPassword = ref(false)
-const email = ref('')
+const username = ref('')
 const password = ref('')
 const remember = ref(false)
 const errorMsg = ref('')
@@ -109,7 +109,7 @@ defineExpose({
 function onSubmit() {
   errorMsg.value = ''
   emit('submit', {
-    email: email.value,
+    username: username.value,
     password: password.value,
     remember: remember.value,
   })
