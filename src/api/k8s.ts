@@ -75,6 +75,23 @@ export interface ContainerListResponse {
   data: ContainerInfo[]
 }
 
+export interface ServiceInfo {
+  name: string
+  namespace: string
+  cluster_ip: string
+  external_ip: string | null
+  port: number | null
+  node_port: number | null
+  target_port: string | null
+  protocol: string | null
+  creation_timestamp: string
+}
+
+export interface ServiceListResponse {
+  services: ServiceInfo[]
+  total: number
+}
+
 export const k8sAPI = {
   getNodes: () => {
     return apiClient.get<NodeInfo[]>('/api/k8s/get/nodes')
@@ -139,5 +156,9 @@ export const k8sAPI = {
 
   getPodContainers: (namespace: string, podName: string) => {
     return apiClient.get<ContainerListResponse>(`/api/k8s/get/pod/containers/${namespace}/${podName}`)
+  },
+
+  getServices: (namespace: string) => {
+    return apiClient.get<ServiceListResponse>(`/api/k8s/get/services/${namespace}`)
   },
 }

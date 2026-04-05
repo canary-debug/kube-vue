@@ -41,6 +41,10 @@
           <Database :size="20" />
           <span>StatefulSets</span>
         </router-link>
+        <router-link to="/services" class="nav-item" :class="{ active: route.path.startsWith('/services') }">
+          <Network :size="20" />
+          <span>Services</span>
+        </router-link>
       </div>
     </nav>
 
@@ -66,6 +70,7 @@ import {
   Repeat,
   Database,
   User,
+  Network,
 } from 'lucide-vue-next'
 
 const route = useRoute()

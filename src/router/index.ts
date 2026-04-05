@@ -49,6 +49,11 @@ const routes: RouteRecordRaw[] = [
         name: 'StatefulSets',
         component: () => import('../views/StatefulSets.vue'),
       },
+      {
+        path: 'services/:namespace?',
+        name: 'Services',
+        component: () => import('../views/Services.vue'),
+      },
     ],
   },
 ]

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { k8sAPI } from '../api/k8s'
-import type { NodeInfo, NodeDetailInfo, ClusterHealth, NamespaceList, DeploymentStatus, PodInfo } from '../api/k8s'
+import type { NodeInfo, NodeDetailInfo, ClusterHealth, NamespaceList, DeploymentStatus, PodInfo, ServiceInfo } from '../api/k8s'
 
 export const useK8sStore = defineStore('k8s', () => {
   const nodes = ref<NodeInfo[]>([])
@@ -11,6 +11,7 @@ export const useK8sStore = defineStore('k8s', () => {
   const namespaces = ref<string[]>([])
   const deployments = ref<Map<string, DeploymentStatus[]>>(new Map())
   const pods = ref<Map<string, PodInfo[]>>(new Map())
+  const services = ref<ServiceInfo[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -124,6 +125,19 @@ export const useK8sStore = defineStore('k8s', () => {
     }
   }
 
+  async function fetchServices(namespace: string) {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await k8sAPI.getServices(namespace)
+      services.value = response.data.services
+    } catch (err: any) {
+      error.value = err.message || `Failed to fetch services in ${namespace}`
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     nodes,
     nodeDetails,
@@ -132,6 +146,7 @@ export const useK8sStore = defineStore('k8s', () => {
     namespaces,
     deployments,
     pods,
+    services,
     loading,
     error,
     fetchNodes,
@@ -144,5 +159,6 @@ export const useK8sStore = defineStore('k8s', () => {
     restartDeployment,
     deletePod,
     getPodLogs,
+    fetchServices,
   }
 })
