@@ -107,11 +107,28 @@
         <div class="modal-content">
           <p>您确定要删除命名空间 <strong>{{ selectedService?.namespace }}</strong> 中的服务 <strong>{{ selectedService?.name }}</strong> 吗？</p>
           <p class="warning-text">此操作无法撤销。</p>
+          <div class="confirm-input-group">
+            <label for="confirmName">请输入 "<strong>{{ selectedService?.name }}</strong>" 以确认删除：</label>
+            <input
+              id="confirmName"
+              v-model="confirmServiceName"
+              type="text"
+              :placeholder="selectedService?.name"
+              class="confirm-input"
+              :class="{ match: canDelete }"
+              autocomplete="off"
+            />
+          </div>
         </div>
         <div class="modal-footer">
           <button class="btn cancel" @click="closeDeleteModal">Cancel</button>
-          <button class="btn delete" @click="deleteService" :disabled="deleting">
-            {{ deleting ? 'Deleting...' : 'Delete' }}
+          <button 
+            class="btn delete" 
+            @click="deleteService" 
+            :disabled="!canDelete || deleting"
+            :class="{ 'btn-disabled': !canDelete || deleting }"
+          >
+            {{ deleting ? '删除中...' : '删除' }}
           </button>
         </div>
       </div>
@@ -139,6 +156,11 @@ const services = ref<ServiceInfo[]>([])
 const showDeleteModal = ref(false)
 const selectedService = ref<ServiceInfo | null>(null)
 const deleting = ref(false)
+const confirmServiceName = ref('')
+
+const canDelete = computed(() => {
+  return confirmServiceName.value === selectedService.value?.name
+})
 
 const namespaces = computed(() => k8sStore.namespaces)
 
@@ -194,6 +216,7 @@ function confirmDelete(service: ServiceInfo) {
 function closeDeleteModal() {
   showDeleteModal.value = false
   selectedService.value = null
+  confirmServiceName.value = ''
 }
 
 async function deleteService() {
@@ -593,6 +616,42 @@ onMounted(async () => {
   font-weight: 500;
 }
 
+.confirm-input-group {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.confirm-input-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.confirm-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Monaco', 'Courier New', monospace;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.confirm-input:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.confirm-input.match {
+  border-color: #059669;
+  background: #ecfdf5;
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -632,8 +691,10 @@ onMounted(async () => {
   background: #b91c1c;
 }
 
-.btn.delete:disabled {
-  opacity: 0.6;
+.btn.delete:disabled,
+.btn-disabled {
+  background: #d1d5db;
+  color: #9ca3af;
   cursor: not-allowed;
 }
 
