@@ -161,4 +161,8 @@ export const k8sAPI = {
   getServices: (namespace: string) => {
     return apiClient.get<ServiceListResponse>(`/api/k8s/get/services/${namespace}`)
   },
+
+  deleteService: (namespace: string, serviceName: string) => {
+    return apiClient.delete(`/api/k8s/delete/service/${namespace}/${serviceName}`)
+  },
 }

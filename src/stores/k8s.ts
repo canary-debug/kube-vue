@@ -138,6 +138,19 @@ export const useK8sStore = defineStore('k8s', () => {
     }
   }
 
+  async function deleteService(namespace: string, serviceName: string) {
+    try {
+      await k8sAPI.deleteService(namespace, serviceName)
+      services.value = services.value.filter(
+        (s) => !(s.namespace === namespace && s.name === serviceName)
+      )
+      return true
+    } catch (err: any) {
+      error.value = err.response?.data?.error || err.response?.data?.message || `Failed to delete ${serviceName}`
+      return false
+    }
+  }
+
   return {
     nodes,
     nodeDetails,
@@ -160,5 +173,6 @@ export const useK8sStore = defineStore('k8s', () => {
     deletePod,
     getPodLogs,
     fetchServices,
+    deleteService,
   }
 })

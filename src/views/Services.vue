@@ -82,6 +82,38 @@
             <code>{{ service.cluster_ip }}:{{ service.port }}</code>
           </div>
         </div>
+
+        <div class="service-actions">
+          <button class="action-btn delete" @click="confirmDelete(service)">
+            <Trash2 :size="16" />
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
+      <div class="modal delete-modal">
+        <div class="modal-header">
+          <h3>确认删除服务</h3>
+          <button class="close-btn" @click="closeDeleteModal">
+            <X :size="20" />
+          </button>
+        </div>
+        <!-- <div class="modal-content">
+          <p>Are you sure you want to delete the service <strong>{{ selectedService?.name }}</strong> in namespace <strong>{{ selectedService?.namespace }}</strong>?</p>
+          <p class="warning-text">This action cannot be undone.</p>
+        </div> -->
+        <div class="modal-content">
+          <p>您确定要删除命名空间 <strong>{{ selectedService?.namespace }}</strong> 中的服务 <strong>{{ selectedService?.name }}</strong> 吗？</p>
+          <p class="warning-text">此操作无法撤销。</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn cancel" @click="closeDeleteModal">Cancel</button>
+          <button class="btn delete" @click="deleteService" :disabled="deleting">
+            {{ deleting ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -95,14 +127,18 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useK8sStore } from '../stores/k8s'
-import { Network, RefreshCw } from 'lucide-vue-next'
+import { Network, RefreshCw, Trash2, X } from 'lucide-vue-next'
+import type { ServiceInfo } from '../api/k8s'
 
 const route = useRoute()
 const k8sStore = useK8sStore()
 const selectedNamespace = ref(route.params.namespace as string || 'all')
 const loading = ref(false)
 const error = ref('')
-const services = ref(k8sStore.services)
+const services = ref<ServiceInfo[]>([])
+const showDeleteModal = ref(false)
+const selectedService = ref<ServiceInfo | null>(null)
+const deleting = ref(false)
 
 const namespaces = computed(() => k8sStore.namespaces)
 
@@ -148,6 +184,43 @@ function formatDate(dateString: string): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function confirmDelete(service: ServiceInfo) {
+  selectedService.value = service
+  showDeleteModal.value = true
+}
+
+function closeDeleteModal() {
+  showDeleteModal.value = false
+  selectedService.value = null
+}
+
+async function deleteService() {
+  if (!selectedService.value) return
+
+  deleting.value = true
+  error.value = ''
+
+  try {
+    const success = await k8sStore.deleteService(
+      selectedService.value.namespace,
+      selectedService.value.name
+    )
+
+    if (success) {
+      services.value = services.value.filter(
+        (s) => !(s.namespace === selectedService.value!.namespace && s.name === selectedService.value!.name)
+      )
+      closeDeleteModal()
+    } else {
+      error.value = k8sStore.error || 'Failed to delete service'
+    }
+  } catch (err: any) {
+    error.value = err.message || 'Failed to delete service'
+  } finally {
+    deleting.value = false
+  }
 }
 
 watch(selectedNamespace, () => {
@@ -407,6 +480,161 @@ onMounted(async () => {
   padding: 4px 8px;
   border-radius: 4px;
   border: 1px solid #e5e7eb;
+}
+
+.service-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+  color: #374151;
+}
+
+.action-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.action-btn.delete {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.action-btn.delete:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.modal-content {
+  padding: 24px;
+}
+
+.modal-content p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.modal-content .warning-text {
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 12px 12px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn.cancel {
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.btn.cancel:hover {
+  background: #f9fafb;
+}
+
+.btn.delete {
+  background: #dc2626;
+  border: none;
+  color: white;
+}
+
+.btn.delete:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn.delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .services-footer {

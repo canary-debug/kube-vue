@@ -1,9 +1,7 @@
-## Service 相关接口
+### 13. 删除指定命名空间下的Service
 
-### 12. 获取所有或指定命名空间下的Service列表
-
-- **接口地址**: `/api/k8s/get/services/:namespace`
-- **请求方法**: `GET`
+- **接口地址**: `/api/k8s/delete/service/:namespace/:servicename`
+- **请求方法**: `DELETE`
 - **认证要求**: 是
 - **Authorization**: `Bearer <token>`
 
@@ -11,19 +9,14 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| namespace | string | 是 | 命名空间名称，使用 `all` 获取所有命名空间下的Service |
+| namespace | string | 是 | 命名空间名称 |
+| servicename | string | 是 | Service名称 |
 
 #### 请求示例
 
-**获取所有命名空间的Service：**
 ```
-GET /api/k8s/get/services/all
-```
-
-**获取指定命名空间的Service：**
-```
-GET /api/k8s/get/services/default
-GET /api/k8s/get/services/kube-system
+DELETE /api/k8s/delete/service/default/nginx-service
+DELETE /api/k8s/delete/service/kube-system/kube-dns
 ```
 
 #### 响应示例
@@ -32,78 +25,37 @@ GET /api/k8s/get/services/kube-system
 
 ```json
 {
-  "services": [
-    {
-      "name": "kubernetes",
-      "namespace": "default",
-      "cluster_ip": "10.96.0.1",
-      "external_ip": null,
-      "port": 443,
-      "node_port": 30001,
-      "target_port": "443",
-      "protocol": "TCP",
-      "creation_timestamp": "2024-01-01 00:00:00"
-    },
-    {
-      "name": "nginx-service",
-      "namespace": "production",
-      "cluster_ip": "10.98.123.45",
-      "external_ip": "192.168.1.100",
-      "port": 80,
-      "node_port": 30080,
-      "target_port": "80",
-      "protocol": "TCP",
-      "creation_timestamp": "2024-01-15 10:30:00"
-    },
-    {
-      "name": "cluster-ip-service",
-      "namespace": "default",
-      "cluster_ip": "10.98.234.56",
-      "external_ip": null,
-      "port": 8080,
-      "node_port": null,
-      "target_port": "8080",
-      "protocol": "TCP",
-      "creation_timestamp": "2024-01-20 14:25:00"
-    }
-  ],
-  "total": 3
+  "status": "success",
+  "message": "Service nginx-service 删除成功"
 }
 ```
 
-**失败响应 (500) - Informer未初始化**
+**失败响应 (404) - Service不存在**
 
 ```json
 {
-  "error": "Services Informer 尚未初始化完成，请稍后重试"
+  "message": "Service 不存在"
 }
 ```
 
-**失败响应 (500) - 获取数据失败**
+**失败响应 (500) - 删除失败**
 
 ```json
 {
-  "error": "获取命名空间失败: ..."
+  "error": "services \"nginx-service\" not found"
 }
 ```
 
 ```json
 {
-  "error": "获取 Service 失败: ..."
+  "error": "Unauthorized"
 }
 ```
 
-#### 响应字段说明
+#### 业务逻辑
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| name | string | Service名称 |
-| namespace | string | Service所在的命名空间 |
-| cluster_ip | string | 集群内部访问IP（VIP） |
-| external_ip | string/null | 外部访问IP，如果没有则返回null |
-| port | int/null | Service端口，如果没有端口则返回null |
-| node_port | int/null | NodePort（外部访问端口），如果没有则返回null |
-| target_port | string/null | 目标容器端口 |
-| protocol | string/null | 协议类型 (TCP/UDP)，如果没有端口则返回null |
-| creation_timestamp | string | Service创建时间，格式：`YYYY-MM-DD HH:MM:SS` |
-| total | int | Service总数 |
+1. 从请求路径中获取命名空间和Service名称
+2. 调用Kubernetes API删除指定的Service
+3. 如果Service不存在，返回404错误
+4. 如果删除失败，返回500错误
+5. 删除成功返回200状态码
