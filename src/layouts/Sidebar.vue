@@ -24,7 +24,7 @@
       </div>
 
       <div class="nav-group">
-        <div class="nav-group-title">Workloads</div>
+        <div class="nav-group-title">应用负载</div>
         <router-link to="/deployments" class="nav-item" :class="{ active: route.path.startsWith('/deployments') }">
           <Box :size="20" />
           <span>Deployments</span>
