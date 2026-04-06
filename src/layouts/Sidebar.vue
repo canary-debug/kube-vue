@@ -12,47 +12,62 @@
       </router-link>
 
       <div class="nav-group">
-        <div class="nav-group-title">Cluster</div>
-        <router-link to="/nodes" class="nav-item" :class="{ active: route.path === '/nodes' }">
-          <HardDrive :size="20" />
-          <span>Nodes</span>
-        </router-link>
-        <router-link to="/namespaces" class="nav-item" :class="{ active: route.path === '/namespaces' }">
-          <FolderTree :size="20" />
-          <span>Namespaces</span>
-        </router-link>
+        <div class="nav-group-title" @click="toggleGroup('cluster')">
+          <span>Cluster</span>
+          <ChevronDown :size="16" class="chevron" :class="{ rotated: expandedGroups.cluster }" />
+        </div>
+        <div class="nav-group-items" v-show="expandedGroups.cluster">
+          <router-link to="/nodes" class="nav-item" :class="{ active: route.path === '/nodes' }">
+            <HardDrive :size="20" />
+            <span>Nodes</span>
+          </router-link>
+          <router-link to="/namespaces" class="nav-item" :class="{ active: route.path === '/namespaces' }">
+            <FolderTree :size="20" />
+            <span>Namespaces</span>
+          </router-link>
+        </div>
       </div>
 
       <div class="nav-group">
-        <div class="nav-group-title">监控大屏</div>
-        <router-link to="/monitoring" class="nav-item" :class="{ active: route.path === '/monitoring' }">
-          <Activity :size="20" />
-          <span>监控工具</span>
-        </router-link>
+        <div class="nav-group-title" @click="toggleGroup('monitoring')">
+          <span>监控大屏</span>
+          <ChevronDown :size="16" class="chevron" :class="{ rotated: expandedGroups.monitoring }" />
+        </div>
+        <div class="nav-group-items" v-show="expandedGroups.monitoring">
+          <router-link to="/monitoring" class="nav-item" :class="{ active: route.path === '/monitoring' }">
+            <Activity :size="20" />
+            <span>监控工具</span>
+          </router-link>
+        </div>
       </div>
 
       <div class="nav-group">
-        <div class="nav-group-title">应用负载</div>
-        <router-link to="/deployments" class="nav-item" :class="{ active: route.path.startsWith('/deployments') }">
-          <Box :size="20" />
-          <span>Deployments</span>
-        </router-link>
-        <router-link to="/pods" class="nav-item" :class="{ active: route.path.startsWith('/pods') }">
-          <Layers :size="20" />
-          <span>Pods</span>
-        </router-link>
-        <router-link to="/daemonsets" class="nav-item" :class="{ active: route.path.startsWith('/daemonsets') }">
-          <Repeat :size="20" />
-          <span>DaemonSets</span>
-        </router-link>
-        <router-link to="/statefulsets" class="nav-item" :class="{ active: route.path.startsWith('/statefulsets') }">
-          <Database :size="20" />
-          <span>StatefulSets</span>
-        </router-link>
-        <router-link to="/services" class="nav-item" :class="{ active: route.path.startsWith('/services') }">
-          <Network :size="20" />
-          <span>Services</span>
-        </router-link>
+        <div class="nav-group-title" @click="toggleGroup('workloads')">
+          <span>应用负载</span>
+          <ChevronDown :size="16" class="chevron" :class="{ rotated: expandedGroups.workloads }" />
+        </div>
+        <div class="nav-group-items" v-show="expandedGroups.workloads">
+          <router-link to="/deployments" class="nav-item" :class="{ active: route.path.startsWith('/deployments') }">
+            <Box :size="20" />
+            <span>Deployments</span>
+          </router-link>
+          <router-link to="/pods" class="nav-item" :class="{ active: route.path.startsWith('/pods') }">
+            <Layers :size="20" />
+            <span>Pods</span>
+          </router-link>
+          <router-link to="/daemonsets" class="nav-item" :class="{ active: route.path.startsWith('/daemonsets') }">
+            <Repeat :size="20" />
+            <span>DaemonSets</span>
+          </router-link>
+          <router-link to="/statefulsets" class="nav-item" :class="{ active: route.path.startsWith('/statefulsets') }">
+            <Database :size="20" />
+            <span>StatefulSets</span>
+          </router-link>
+          <router-link to="/services" class="nav-item" :class="{ active: route.path.startsWith('/services') }">
+            <Network :size="20" />
+            <span>Services</span>
+          </router-link>
+        </div>
       </div>
     </nav>
 
@@ -66,6 +81,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, reactive } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import {
@@ -80,10 +96,21 @@ import {
   User,
   Network,
   Activity,
+  ChevronDown,
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const authStore = useAuthStore()
+
+const expandedGroups = reactive({
+  cluster: true,
+  monitoring: false,
+  workloads: false,
+})
+
+function toggleGroup(group: keyof typeof expandedGroups) {
+  expandedGroups[group] = !expandedGroups[group]
+}
 </script>
 
 <style scoped>
@@ -118,16 +145,50 @@ const authStore = useAuthStore()
 }
 
 .nav-group {
-  margin-bottom: 24px;
+  margin-bottom: 8px;
 }
 
 .nav-group-title {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: #9ca3af;
-  text-transform: uppercase;
-  padding: 8px 12px;
-  margin-bottom: 4px;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.nav-group-title:hover {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.chevron {
+  transition: transform 0.3s ease;
+}
+
+.chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.nav-group-items {
+  margin-top: 4px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .nav-item {
@@ -141,7 +202,7 @@ const authStore = useAuthStore()
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .nav-item:hover {
