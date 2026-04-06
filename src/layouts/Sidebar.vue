@@ -24,6 +24,14 @@
       </div>
 
       <div class="nav-group">
+        <div class="nav-group-title">监控大屏</div>
+        <router-link to="/monitoring" class="nav-item" :class="{ active: route.path === '/monitoring' }">
+          <Activity :size="20" />
+          <span>监控工具</span>
+        </router-link>
+      </div>
+
+      <div class="nav-group">
         <div class="nav-group-title">应用负载</div>
         <router-link to="/deployments" class="nav-item" :class="{ active: route.path.startsWith('/deployments') }">
           <Box :size="20" />
@@ -71,6 +79,7 @@ import {
   Database,
   User,
   Network,
+  Activity,
 } from 'lucide-vue-next'
 
 const route = useRoute()
