@@ -286,7 +286,7 @@ async function startStream() {
       selectedPod.value.name,
       {
         container: selectedContainer.value || undefined,
-        tail: undefined,
+        tail: tailLines.value,
       },
       streamCallback
     )
