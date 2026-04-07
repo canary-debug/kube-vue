@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-vue
+  namespace: kube-vue-system
+  labels:
+    app: kube-vue
+spec:
+  type: ClusterIP
+  selector:
+    app: kube-vue
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
