@@ -125,6 +125,62 @@ export const useK8sStore = defineStore('k8s', () => {
     }
   }
 
+  async function getPodLogsStream(
+    namespace: string, 
+    pod: string, 
+    params: { container?: string; tail?: number },
+    onMessage: (data: string) => void
+  ) {
+    try {
+      const response = await k8sAPI.getPodLogsStream(namespace, pod, params)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      
+      if (!reader) {
+        throw new Error('Failed to get reader')
+      }
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) {
+          break
+        }
+        
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim()
+            if (data) {
+              onMessage(data)
+            }
+          } else if (line.trim()) {
+            onMessage(line)
+          }
+        }
+      }
+      
+      if (buffer.startsWith('data: ')) {
+        const data = buffer.slice(6).trim()
+        if (data) {
+          onMessage(data)
+        }
+      }
+    } catch (err: any) {
+      error.value = err.message || `Failed to stream logs for ${pod}`
+      throw err
+    }
+  }
+
   async function fetchServices(namespace: string) {
     loading.value = true
     error.value = null
@@ -172,6 +228,7 @@ export const useK8sStore = defineStore('k8s', () => {
     restartDeployment,
     deletePod,
     getPodLogs,
+    getPodLogsStream,
     fetchServices,
     deleteService,
   }

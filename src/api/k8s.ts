@@ -154,6 +154,22 @@ export const k8sAPI = {
     return apiClient.get(`/api/k8s/pod/logs/${namespace}/${pod}`, { params })
   },
 
+  getPodLogsStream: (namespace: string, pod: string, params?: { container?: string; tail?: number }) => {
+    const queryParams = new URLSearchParams()
+    if (params?.container) queryParams.append('container', params.container)
+    if (params?.tail) queryParams.append('tail', params.tail.toString())
+    queryParams.append('follow', 'true')
+    
+    const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000'
+    const url = `${baseURL}/api/k8s/pod/logs/${namespace}/${pod}?${queryParams.toString()}`
+    
+    return fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+      },
+    })
+  },
+
   getPodContainers: (namespace: string, podName: string) => {
     return apiClient.get<ContainerListResponse>(`/api/k8s/get/pod/containers/${namespace}/${podName}`)
   },

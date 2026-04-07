@@ -109,12 +109,16 @@
               min="10"
               max="500"
             />
+            <label class="follow-toggle">
+              <input type="checkbox" v-model="followLogs" @change="toggleFollow" />
+              <span>实时</span>
+            </label>
             <button class="refresh-btn small" @click="loadLogs">
               Load
             </button>
           </div>
           <div v-if="loadingLogs" class="loading-message">Loading logs...</div>
-          <pre v-else class="logs-content">{{ podLogs || 'No logs available' }}</pre>
+          <pre ref="logsContentRef" v-else class="logs-content">{{ podLogs || 'No logs available' }}</pre>
         </div>
       </div>
     </div>
@@ -122,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useK8sStore } from '../stores/k8s'
 import { Layers, RefreshCw, FileText, Trash2, X } from 'lucide-vue-next'
@@ -145,6 +149,9 @@ const podLogs = ref('')
 const podContainers = ref<ContainerInfo[]>([])
 const selectedContainer = ref('')
 const tailLines = ref(100)
+const followLogs = ref(false)
+const logsContentRef = ref<HTMLPreElement | null>(null)
+let streamController: AbortController | null = null
 
 const namespaces = computed(() => k8sStore.namespaces)
 
@@ -236,7 +243,71 @@ function closeLogsModal() {
   selectedPod.value = null
   podLogs.value = ''
   podContainers.value = []
+  followLogs.value = false
+  stopStream()
 }
+
+function stopStream() {
+  if (streamController) {
+    streamController.abort()
+    streamController = null
+  }
+}
+
+async function toggleFollow() {
+  if (followLogs.value) {
+    await startStream()
+  } else {
+    stopStream()
+  }
+}
+
+async function startStream() {
+  if (!selectedPod.value) return
+
+  stopStream()
+  podLogs.value = ''
+  loadingLogs.value = true
+  podLogs.value = '正在建立实时日志连接...\n'
+
+  try {
+    const streamCallback = (data: string) => {
+      podLogs.value += data + '\n'
+      setTimeout(() => {
+        if (logsContentRef.value) {
+          logsContentRef.value.scrollTop = logsContentRef.value.scrollHeight
+        }
+      }, 0)
+    }
+
+    await k8sStore.getPodLogsStream(
+      selectedPod.value.namespace,
+      selectedPod.value.name,
+      {
+        container: selectedContainer.value || undefined,
+        tail: tailLines.value,
+      },
+      streamCallback
+    )
+  } catch (err: any) {
+    if (err.name !== 'AbortError') {
+      podLogs.value += '\n连接错误: ' + (err.message || '未知错误') + '\n'
+    }
+  } finally {
+    loadingLogs.value = false
+  }
+}
+
+watch([selectedContainer, tailLines], () => {
+  if (followLogs.value) {
+    followLogs.value = false
+    stopStream()
+  }
+})
+
+onUnmounted(() => {
+  stopStream()
+})
 
 async function deletePod(pod: PodWithNamespace) {
   if (!confirm(`Are you sure you want to delete pod ${pod.name}?`)) {
@@ -564,6 +635,7 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   margin-bottom: 16px;
+  align-items: center;
 }
 
 .container-select, .tail-input {
@@ -579,6 +651,39 @@ onMounted(async () => {
 
 .tail-input {
   width: 120px;
+}
+
+.follow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.follow-toggle:hover {
+  background: #e5e7eb;
+}
+
+.follow-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.follow-toggle input[type="checkbox"]:checked + span {
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+.follow-toggle.active {
+  background: #eef2ff;
+  color: #4f46e5;
 }
 
 .logs-content {
