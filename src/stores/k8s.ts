@@ -12,6 +12,7 @@ export const useK8sStore = defineStore('k8s', () => {
   const deployments = ref<Map<string, DeploymentStatus[]>>(new Map())
   const pods = ref<Map<string, PodInfo[]>>(new Map())
   const services = ref<ServiceInfo[]>([])
+  const podCount = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -181,6 +182,15 @@ export const useK8sStore = defineStore('k8s', () => {
     }
   }
 
+  async function fetchPodCount() {
+    try {
+      const response = await k8sAPI.getPodCount()
+      podCount.value = response.data.pod_count
+    } catch (err: any) {
+      error.value = err.message || 'Failed to fetch pod count'
+    }
+  }
+
   async function fetchServices(namespace: string) {
     loading.value = true
     error.value = null
@@ -216,6 +226,7 @@ export const useK8sStore = defineStore('k8s', () => {
     deployments,
     pods,
     services,
+    podCount,
     loading,
     error,
     fetchNodes,
@@ -229,6 +240,7 @@ export const useK8sStore = defineStore('k8s', () => {
     deletePod,
     getPodLogs,
     getPodLogsStream,
+    fetchPodCount,
     fetchServices,
     deleteService,
   }

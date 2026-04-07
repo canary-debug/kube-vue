@@ -27,12 +27,12 @@
       </div>
 
       <div class="stat-card">
-        <div class="stat-icon deployments">
-          <Box :size="24" />
+        <div class="stat-icon pods">
+          <Layers :size="24" />
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ totalDeployments }}</div>
-          <div class="stat-label">Deployments</div>
+          <div class="stat-value">{{ k8sStore.podCount }}</div>
+          <div class="stat-label">Pod Replicas</div>
         </div>
       </div>
 
@@ -177,14 +177,6 @@ const updateTime = () => {
 const nodeCount = computed(() => k8sStore.nodeCount || k8sStore.nodes.length)
 const namespaceCount = computed(() => k8sStore.namespaces.length)
 
-const totalDeployments = computed(() => {
-  let total = 0
-  k8sStore.deployments.forEach((deployments) => {
-    total += deployments.length
-  })
-  return total
-})
-
 const isHealthy = computed(() => {
   return k8sStore.clusterHealth?.status === 'Healthy'
 })
@@ -206,6 +198,7 @@ onMounted(async () => {
     k8sStore.fetchNodeCount(),
     k8sStore.fetchNamespaces(),
     k8sStore.fetchClusterHealth(),
+    k8sStore.fetchPodCount(),
   ])
 })
 
@@ -273,6 +266,7 @@ onUnmounted(() => {
 .stat-icon.deployments { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
 .stat-icon.health.healthy { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
 .stat-icon.health.unhealthy { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
+.stat-icon.pods { background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); }
 
 .stat-info {
   flex: 1;

@@ -170,6 +170,10 @@ export const k8sAPI = {
     })
   },
 
+  getPodCount: () => {
+    return apiClient.get<{ pod_count: number }>('/api/k8s/get/pods/len')
+  },
+
   getPodContainers: (namespace: string, podName: string) => {
     return apiClient.get<ContainerListResponse>(`/api/k8s/get/pod/containers/${namespace}/${podName}`)
   },
