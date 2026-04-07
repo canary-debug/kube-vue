@@ -95,13 +95,13 @@
                   <span class="label">Memory</span>
                   <span class="value">{{ formatMemory(selectedNode.memory) }}</span>
                 </div>
-                <div v-if="selectedNode.ip" class="detail-item">
+                <div v-if="'ip' in selectedNode && selectedNode.ip" class="detail-item">
                   <span class="label">IP</span>
-                  <span class="value">{{ selectedNode.ip }}</span>
+                  <span class="value">{{ (selectedNode as NodeDetailInfo).ip }}</span>
                 </div>
-                <div v-if="selectedNode.osType" class="detail-item">
+                <div v-if="'osType' in selectedNode && selectedNode.osType" class="detail-item">
                   <span class="label">OS</span>
-                  <span class="value">{{ selectedNode.osType }}</span>
+                  <span class="value">{{ (selectedNode as NodeDetailInfo).osType }}</span>
                 </div>
               </div>
             </div>
@@ -109,17 +109,17 @@
             <div v-if="hasVersionInfo" class="detail-section">
               <h4>Version</h4>
               <div class="detail-grid">
-                <div v-if="selectedNode.kubeletVersion" class="detail-item">
+                <div v-if="'kubeletVersion' in selectedNode && selectedNode.kubeletVersion" class="detail-item">
                   <span class="label">Kubelet</span>
-                  <span class="value">{{ selectedNode.kubeletVersion }}</span>
+                  <span class="value">{{ (selectedNode as NodeDetailInfo).kubeletVersion }}</span>
                 </div>
-                <div v-if="selectedNode.kubeProxy" class="detail-item">
+                <div v-if="'kubeProxy' in selectedNode && selectedNode.kubeProxy" class="detail-item">
                   <span class="label">Kube-Proxy</span>
-                  <span class="value">{{ selectedNode.kubeProxy }}</span>
+                  <span class="value">{{ (selectedNode as NodeDetailInfo).kubeProxy }}</span>
                 </div>
-                <div v-if="selectedNode.dockerVersion" class="detail-item">
+                <div v-if="'dockerVersion' in selectedNode && selectedNode.dockerVersion" class="detail-item">
                   <span class="label">Container</span>
-                  <span class="value">{{ selectedNode.dockerVersion }}</span>
+                  <span class="value">{{ (selectedNode as NodeDetailInfo).dockerVersion }}</span>
                 </div>
               </div>
             </div>
@@ -175,7 +175,8 @@ const displayNodes = computed(() => {
 
 const hasVersionInfo = computed(() => {
   if (!selectedNode.value) return false
-  return !!(selectedNode.value.kubeletVersion || selectedNode.value.kubeProxy || selectedNode.value.dockerVersion)
+  const node = selectedNode.value as NodeDetailInfo
+  return !!(node.kubeletVersion || node.kubeProxy || node.dockerVersion)
 })
 
 function getDisplayLabels(labels?: Record<string, string>) {
