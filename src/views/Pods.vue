@@ -267,12 +267,13 @@ async function startStream() {
 
   stopStream()
   podLogs.value = ''
-  loadingLogs.value = true
   podLogs.value = '正在建立实时日志连接...\n'
+  loadingLogs.value = true
 
   try {
     const streamCallback = (data: string) => {
       podLogs.value += data + '\n'
+      loadingLogs.value = false
       setTimeout(() => {
         if (logsContentRef.value) {
           logsContentRef.value.scrollTop = logsContentRef.value.scrollHeight
@@ -285,7 +286,7 @@ async function startStream() {
       selectedPod.value.name,
       {
         container: selectedContainer.value || undefined,
-        tail: tailLines.value,
+        tail: undefined,
       },
       streamCallback
     )
