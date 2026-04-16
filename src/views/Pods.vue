@@ -122,6 +122,51 @@
         </div>
       </div>
     </div>
+
+    <!-- 删除确认模态框 -->
+    <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
+      <div class="modal delete-modal">
+        <div class="modal-header">
+          <div class="header-title">
+            <div class="error-icon">
+              <X :size="20" stroke-width="3" />
+            </div>
+            <h3>删除容器组</h3>
+          </div>
+          <button class="close-btn" @click="closeDeleteModal">
+            <X :size="20" />
+          </button>
+        </div>
+        <div class="modal-content">
+          <div class="warning-banner">
+            请输入容器组名称 <span class="highlight">{{ podToDelete?.name }}</span> 以确认您了解此操作的风险。
+          </div>
+          <div class="input-wrapper">
+            <input
+              v-model="confirmPodName"
+              type="text"
+              class="confirm-input"
+              :placeholder="podToDelete?.name"
+              @keyup.enter="confirmDelete"
+              autofocus
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="footer-btn cancel-btn" @click="closeDeleteModal">
+            取消
+          </button>
+          <button
+            class="footer-btn confirm-btn"
+            :disabled="confirmPodName !== podToDelete?.name || deleting"
+            @click="confirmDelete"
+          >
+            <RefreshCw v-if="deleting" :size="16" class="spinning" />
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -152,6 +197,12 @@ const tailLines = ref(100)
 const followLogs = ref(false)
 const logsContentRef = ref<HTMLPreElement | null>(null)
 let streamController: AbortController | null = null
+
+// 删除 Pod 相关状态
+const showDeleteModal = ref(false)
+const podToDelete = ref<PodWithNamespace | null>(null)
+const confirmPodName = ref('')
+const deleting = ref(false)
 
 const namespaces = computed(() => k8sStore.namespaces)
 
@@ -311,16 +362,31 @@ onUnmounted(() => {
 })
 
 async function deletePod(pod: PodWithNamespace) {
-  if (!confirm(`Are you sure you want to delete pod ${pod.name}?`)) {
-    return
-  }
+  podToDelete.value = pod
+  confirmPodName.value = ''
+  showDeleteModal.value = true
+}
 
-  const success = await k8sStore.deletePod(pod.namespace, pod.name)
-  if (success) {
-    alert('Pod deleted successfully')
-    await loadPods()
-  } else {
-    alert(k8sStore.error || 'Failed to delete pod')
+function closeDeleteModal() {
+  showDeleteModal.value = false
+  podToDelete.value = null
+  confirmPodName.value = ''
+}
+
+async function confirmDelete() {
+  if (!podToDelete.value || confirmPodName.value !== podToDelete.value.name) return
+
+  deleting.value = true
+  try {
+    const success = await k8sStore.deletePod(podToDelete.value.namespace, podToDelete.value.name)
+    if (success) {
+      closeDeleteModal()
+      await loadPods()
+    } else {
+      alert(k8sStore.error || '删除容器组失败')
+    }
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -702,5 +768,107 @@ onMounted(async () => {
   min-height: 400px;
   max-height: 60vh;
   overflow-y: auto;
+}
+
+/* 删除模态框样式 */
+.delete-modal {
+  max-width: 500px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.error-icon {
+  width: 28px;
+  height: 28px;
+  background: #dc2626;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.warning-banner {
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.highlight {
+  font-weight: 600;
+  color: #111827;
+}
+
+.input-wrapper {
+  margin-bottom: 8px;
+}
+
+.confirm-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
+  background: white;
+}
+
+.confirm-input:focus {
+  outline: none;
+  border-color: #10b981;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.footer-btn {
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cancel-btn {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+}
+
+.cancel-btn:hover {
+  background: #e5e7eb;
+}
+
+.confirm-btn {
+  background: #f87171;
+  border: none;
+  color: white;
+}
+
+.confirm-btn:not(:disabled):hover {
+  background: #ef4444;
+}
+
+.confirm-btn:disabled {
+  background: #fca5a5;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 </style>
