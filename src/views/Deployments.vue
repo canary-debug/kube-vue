@@ -103,6 +103,42 @@
         </div>
       </div>
     </div>
+
+    <!-- 重启确认模态框 -->
+    <div v-if="showRestartModal" class="modal-overlay" @click.self="closeRestartModal">
+      <div class="modal confirm-modal">
+        <div class="modal-header">
+          <div class="header-title">
+            <div class="info-icon">
+              <span class="q-mark">?</span>
+            </div>
+            <h3>重新创建</h3>
+          </div>
+          <button class="close-btn" @click="closeRestartModal">
+            <X :size="20" />
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>
+            您确定重新创建部署 <span class="highlight">{{ deploymentToRestart?.name }}</span> 吗？
+            容器组副本将会根据更新策略更新，同时相关业务将会中断。
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="footer-btn cancel-btn" @click="closeRestartModal">
+            取消
+          </button>
+          <button
+            class="footer-btn confirm-btn"
+            :disabled="restarting"
+            @click="confirmRestart"
+          >
+            <RefreshCw v-if="restarting" :size="16" class="spinning" />
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -126,6 +162,11 @@ const showPodsModal = ref(false)
 const selectedDeployment = ref<DeploymentWithNamespace | null>(null)
 const loadingPods = ref(false)
 const currentPods = ref<any[]>([])
+
+// 重启相关状态
+const showRestartModal = ref(false)
+const deploymentToRestart = ref<DeploymentWithNamespace | null>(null)
+const restarting = ref(false)
 
 const namespaces = computed(() => k8sStore.namespaces)
 
@@ -183,16 +224,29 @@ function closePodsModal() {
 }
 
 async function restartDeployment(deployment: DeploymentWithNamespace) {
-  if (!confirm(`Are you sure you want to restart ${deployment.name}?`)) {
-    return
-  }
+  deploymentToRestart.value = deployment
+  showRestartModal.value = true
+}
 
-  const success = await k8sStore.restartDeployment(deployment.name, deployment.namespace)
-  if (success) {
-    alert('Deployment restarted successfully')
-    await loadDeployments()
-  } else {
-    alert(k8sStore.error || 'Failed to restart deployment')
+function closeRestartModal() {
+  showRestartModal.value = false
+  deploymentToRestart.value = null
+}
+
+async function confirmRestart() {
+  if (!deploymentToRestart.value) return
+
+  restarting.value = true
+  try {
+    const success = await k8sStore.restartDeployment(deploymentToRestart.value.name, deploymentToRestart.value.namespace)
+    if (success) {
+      closeRestartModal()
+      await loadDeployments()
+    } else {
+      alert(k8sStore.error || '重启控制器失败')
+    }
+  } finally {
+    restarting.value = false
   }
 }
 
@@ -497,5 +551,95 @@ td {
   font-size: 14px;
   font-weight: 500;
   color: #111827;
+}
+
+/* 确认模态框样式 */
+.confirm-modal {
+  max-width: 550px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.info-icon {
+  width: 28px;
+  height: 28px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.q-mark {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-body p {
+  margin: 0;
+  font-size: 15px;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.highlight {
+  font-weight: 600;
+  color: #111827;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+}
+
+.footer-btn {
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cancel-btn {
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.cancel-btn:hover {
+  background: #f3f4f6;
+}
+
+.confirm-btn {
+  background: #1f2937;
+  border: none;
+  color: white;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background: #111827;
+}
+
+.confirm-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 </style>
