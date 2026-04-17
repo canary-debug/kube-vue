@@ -54,6 +54,7 @@ export interface PodInfo {
   node_name: string
   pod_ip: string
   created_at: string
+  namespace?: string
   labels?: Record<string, string>
 }
 
@@ -184,5 +185,9 @@ export const k8sAPI = {
 
   deleteService: (namespace: string, serviceName: string) => {
     return apiClient.delete(`/api/k8s/delete/service/${namespace}/${serviceName}`)
+  },
+
+  searchPods: (filter: string) => {
+    return apiClient.get<PodListResponse>(`/api/k8s/get/pods/search?filter=${encodeURIComponent(filter)}`)
   },
 }

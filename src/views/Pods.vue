@@ -7,11 +7,32 @@
           <option value="">All Namespaces</option>
           <option v-for="ns in namespaces" :key="ns" :value="ns">{{ ns }}</option>
         </select>
+        <div class="search-box">
+          <Search :size="16" class="search-icon" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search pods (regex)..."
+            class="search-input"
+            @keyup.enter="loadPods"
+          />
+          <X 
+            v-if="searchQuery" 
+            :size="16" 
+            class="clear-icon" 
+            @click="clearSearch" 
+          />
+        </div>
       </div>
       <button class="refresh-btn" @click="loadPods" :disabled="loading">
         <RefreshCw :size="18" :class="{ spinning: loading }" />
         Refresh
       </button>
+    </div>
+
+    <div v-if="searchError" class="search-error-message">
+      <AlertCircle :size="18" />
+      <span>{{ searchError }}</span>
     </div>
 
     <div v-if="error" class="error-message">
@@ -185,7 +206,8 @@
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useK8sStore } from '../stores/k8s'
-import { Layers, RefreshCw, FileText, Trash2, X, Terminal } from 'lucide-vue-next'
+import { Layers, RefreshCw, FileText, Trash2, X, Terminal, Search, AlertCircle } from 'lucide-vue-next'
+import { k8sAPI } from '../api/k8s'
 import type { PodInfo, ContainerInfo } from '../api/k8s'
 import PodTerminalModal from '../components/PodTerminalModal.vue'
 
@@ -216,6 +238,16 @@ const podToDelete = ref<PodWithNamespace | null>(null)
 const confirmPodName = ref('')
 const deleting = ref(false)
 
+// 搜索相关状态
+const searchQuery = ref('')
+const searchError = ref('')
+
+function clearSearch() {
+  searchQuery.value = ''
+  searchError.value = ''
+  loadPods()
+}
+
 // 终端相关状态
 const showTerminalModal = ref(false)
 const terminalPodName = ref('')
@@ -237,40 +269,57 @@ const filteredPods = computed(() => {
 async function loadPods() {
   loading.value = true
   error.value = ''
+  searchError.value = ''
   pods.value = []
 
   try {
-    const namespace = selectedNamespace.value || namespaces.value[0] || 'default'
-    await k8sStore.fetchDeployments(namespace)
+    if (searchQuery.value) {
+      // 使用搜索接口
+      const response = await k8sAPI.searchPods(searchQuery.value)
+      if (response.data.data) {
+        pods.value = response.data.data.map(p => ({
+          ...p,
+          namespace: p.namespace || 'unknown'
+        }))
+      }
+    } else {
+      // 原有逻辑：按命名空间加载
+      const namespace = selectedNamespace.value || namespaces.value[0] || 'default'
+      await k8sStore.fetchDeployments(namespace)
 
-    const deployments = k8sStore.deployments.get(namespace) || []
-    for (const deployment of deployments) {
-      await k8sStore.fetchPods(deployment.name, namespace)
-      const key = `${namespace}/${deployment.name}`
-      const podList = k8sStore.pods.get(key) || []
-      podList.forEach((pod) => {
-        pods.value.push({ ...pod, namespace })
-      })
-    }
+      const deployments = k8sStore.deployments.get(namespace) || []
+      for (const deployment of deployments) {
+        await k8sStore.fetchPods(deployment.name, namespace)
+        const key = `${namespace}/${deployment.name}`
+        const podList = k8sStore.pods.get(key) || []
+        podList.forEach((pod) => {
+          pods.value.push({ ...pod, namespace })
+        })
+      }
 
-    if (!selectedNamespace.value) {
-      for (const ns of namespaces.value) {
-        if (ns !== namespace) {
-          await k8sStore.fetchDeployments(ns)
-          const deploys = k8sStore.deployments.get(ns) || []
-          for (const dep of deploys) {
-            await k8sStore.fetchPods(dep.name, ns)
-            const k = `${ns}/${dep.name}`
-            const pList = k8sStore.pods.get(k) || []
-            pList.forEach((pod) => {
-              pods.value.push({ ...pod, namespace: ns })
-            })
+      if (!selectedNamespace.value) {
+        for (const ns of namespaces.value) {
+          if (ns !== namespace) {
+            await k8sStore.fetchDeployments(ns)
+            const deploys = k8sStore.deployments.get(ns) || []
+            for (const dep of deploys) {
+              await k8sStore.fetchPods(dep.name, ns)
+              const k = `${ns}/${dep.name}`
+              const pList = k8sStore.pods.get(k) || []
+              pList.forEach((pod) => {
+                pods.value.push({ ...pod, namespace: ns })
+              })
+            }
           }
         }
       }
     }
   } catch (err: any) {
-    error.value = err.message || 'Failed to load pods'
+    if (searchQuery.value && err.response?.data?.error) {
+      searchError.value = err.response.data.error
+    } else {
+      error.value = err.message || 'Failed to load pods'
+    }
   } finally {
     loading.value = false
   }
@@ -467,6 +516,56 @@ onMounted(async () => {
   font-size: 14px;
   background: white;
   cursor: pointer;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  width: 280px;
+  transition: all 0.2s;
+}
+
+.search-box:focus-within {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.search-icon {
+  color: #9ba3af;
+}
+
+.search-input {
+  border: none;
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+  color: #111827;
+}
+
+.clear-icon {
+  color: #9ba3af;
+  cursor: pointer;
+}
+
+.clear-icon:hover {
+  color: #6b7280;
+}
+
+.search-error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  color: #dc2626;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
 }
 
 .refresh-btn {
