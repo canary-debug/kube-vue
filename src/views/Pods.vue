@@ -69,6 +69,10 @@
         </div>
 
         <div class="pod-actions">
+          <button class="action-btn" @click="openTerminal(pod)">
+            <Terminal :size="16" />
+            Console
+          </button>
           <button class="action-btn" @click="viewLogs(pod)">
             <FileText :size="16" />
             Logs
@@ -123,6 +127,13 @@
       </div>
     </div>
 
+    <!-- 终端模态框 -->
+    <PodTerminalModal
+      v-model:visible="showTerminalModal"
+      :pod-name="terminalPodName"
+      :namespace="terminalNamespace"
+    />
+
     <!-- 删除确认模态框 -->
     <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
       <div class="modal delete-modal">
@@ -174,8 +185,9 @@
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useK8sStore } from '../stores/k8s'
-import { Layers, RefreshCw, FileText, Trash2, X } from 'lucide-vue-next'
+import { Layers, RefreshCw, FileText, Trash2, X, Terminal } from 'lucide-vue-next'
 import type { PodInfo, ContainerInfo } from '../api/k8s'
+import PodTerminalModal from '../components/PodTerminalModal.vue'
 
 interface PodWithNamespace extends PodInfo {
   namespace: string
@@ -203,6 +215,17 @@ const showDeleteModal = ref(false)
 const podToDelete = ref<PodWithNamespace | null>(null)
 const confirmPodName = ref('')
 const deleting = ref(false)
+
+// 终端相关状态
+const showTerminalModal = ref(false)
+const terminalPodName = ref('')
+const terminalNamespace = ref('')
+
+function openTerminal(pod: PodWithNamespace) {
+  terminalPodName.value = pod.name
+  terminalNamespace.value = pod.namespace
+  showTerminalModal.value = true
+}
 
 const namespaces = computed(() => k8sStore.namespaces)
 
